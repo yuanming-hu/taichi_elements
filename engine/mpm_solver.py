@@ -46,10 +46,7 @@ class MPMSolver:
         assert self.dim in (
             2, 3), "MPM solver supports only 2D and 3D simulations."
 
-        if self.dim == 2:
-            max_num_particles = 2**20
-        else:
-            max_num_particles = 2**22
+        max_num_particles = 2**30
 
         self.res = res
         self.n_particles = ti.var(ti.i32, shape=())
@@ -171,6 +168,7 @@ class MPMSolver:
 
     @ti.kernel
     def p2g(self, dt: ti.f32):
+        ti.block_dim(512)
         for p in self.x:
             base = ti.floor(self.x[p] * self.inv_dx - 0.5).cast(int)
             fx = self.x[p] * self.inv_dx - base.cast(float)
@@ -269,7 +267,7 @@ class MPMSolver:
                         self.grid_v[I] = ti.Vector.zero(ti.f32, self.dim)
                     else:
                         v = self.grid_v[I]
-                        normal = ti.Vector.normalized(offset, eps=1e-5)
+                        normal = offset.normalized(1e-5)
                         normal_component = normal.dot(v)
 
                         if ti.static(surface == self.surface_slip):
@@ -426,7 +424,6 @@ class MPMSolver:
 
         for i in range(self.n_particles[None],
                        self.n_particles[None] + new_particles):
-            self.material[i] = new_material
             x = self.source_bound[0] + self.random_point_in_unit_sphere(
             ) * self.source_bound[1]
             self.seed_particle(i, x, new_material, color,
@@ -501,6 +498,25 @@ class MPMSolver:
 
         self.voxelizer.voxelize(triangles)
         self.seed_from_voxels(material, color, sample_density)
+        
+    @ti.kernel
+    def seed_from_external_array(self, num_particles: ti.i32, pos: ti.ext_arr(), new_material: ti.i32,
+                       color: ti.i32):
+    
+        for i in range(num_particles):
+            x = ti.Vector([pos[i, 0], pos[i, 1], pos[i, 2]])
+            self.seed_particle(self.n_particles[None] + i, x, new_material, color,
+                               self.source_velocity[None])
+        
+        self.n_particles[None] += num_particles
+        
+    def add_particles(self,
+                 particles,
+                 material,
+                 color=0xFFFFFF,
+                 velocity=None):
+        self.set_source_velocity(velocity=velocity)
+        self.seed_from_external_array(len(particles), particles, material, color)
 
     @ti.kernel
     def copy_dynamic_nd(self, np_x: ti.ext_arr(), input_x: ti.template()):
@@ -528,3 +544,10 @@ class MPMSolver:
             'material': np_material,
             'color': np_color
         }
+    
+    
+    @ti.kernel
+    def clear_particles(self):
+        self.n_particles[None] = 0
+        ti.deactivate(self.x.loop_range().parent().snode(), [])
+

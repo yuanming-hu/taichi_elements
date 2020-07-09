@@ -19,7 +19,7 @@ for i in range(3):
 
 for frame in range(500):
     mpm.step(8e-3)
-    if frame < 100:
+    if frame < 500:
         mpm.add_cube(lower_corner=[0.1, 0.4],
                      cube_size=[0.01, 0.05],
                      velocity=[1, 0],
@@ -39,3 +39,7 @@ for frame in range(500):
     particles = mpm.particle_info()
     gui.circles(particles['position'], radius=1.5, color=colors[particles['material']])
     gui.show(f'{frame:06d}.png' if write_to_disk else None)
+    if frame % 10 == 0:
+        mpm.n_particles[None] = 0
+        mpm.x.loop_range().parent().snode().deactivate_all()
+
