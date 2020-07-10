@@ -39,14 +39,13 @@ class MPMSolver:
     def __init__(self,
                  res,
                  size=1,
-                 max_num_particles=None,
+                 max_num_particles=2**20,
+                 # Max 128 MB particles
                  padding=3,
                  unbounded=False):
         self.dim = len(res)
         assert self.dim in (
             2, 3), "MPM solver supports only 2D and 3D simulations."
-
-        max_num_particles = 2**30
 
         self.res = res
         self.n_particles = ti.var(ti.i32, shape=())
@@ -60,6 +59,7 @@ class MPMSolver:
         self.gravity = ti.Vector(self.dim, dt=ti.f32, shape=())
         self.source_bound = ti.Vector(self.dim, dt=ti.f32, shape=2)
         self.source_velocity = ti.Vector(self.dim, dt=ti.f32, shape=())
+        self.pid = ti.var(ti.i32)
         # position
         self.x = ti.Vector(self.dim, dt=ti.f32)
         # velocity
@@ -73,32 +73,40 @@ class MPMSolver:
         self.color = ti.var(dt=ti.i32)
         # plastic deformation
         self.Jp = ti.var(dt=ti.f32)
+        
+        if self.dim == 2:
+            indices = ti.ij
+        else:
+            indices = ti.ijk
 
         if unbounded:
             # grid node momentum/velocity
             self.grid_v = ti.Vector(self.dim, dt=ti.f32)
             # grid node mass
             self.grid_m = ti.var(dt=ti.f32)
+            self.grid = ti.root.pointer(indices, 32)
             if self.dim == 2:
-                self.grid = ti.root.pointer(ti.ij, 128)
-                self.grid.pointer(ti.ij,
-                                  8).dense(ti.ij,
-                                           8).place(self.grid_m,
-                                                    self.grid_v,
-                                                    offset=(-4096, -4096))
+                block = self.grid.pointer(indices, 16)
+                voxel = block.dense(indices, 8)
             else:
-                self.grid = ti.root.pointer(ti.ijk, 128)
-                self.grid.pointer(ti.ijk,
-                                  16).dense(ti.ijk,
-                                            4).place(self.grid_m,
-                                                     self.grid_v,
-                                                     offset=(-4096, -4096,
-                                                             -4096))
+                block = self.grid.pointer(indices, 32)
+                voxel = block.dense(indices, 4)
+                
+            voxel.place(self.grid_m, self.grid_v, offset=[-2048 for _ in range(self.dim)])
+            block.dynamic(ti.indices(self.dim), 1024 * 1024, chunk_size=4096).place(self.pid)
         else:
+            raise NotImplementedError()
             # grid node momentum/velocity
+            # if False: # Dense
             self.grid_v = ti.Vector(self.dim, dt=ti.f32, shape=self.res)
             # grid node mass
             self.grid_m = ti.var(dt=ti.f32, shape=self.res)
+            '''
+            else:
+                block = ti.root.pointer(indices, [r // 4 for r in res])
+                block.dense(indices, 4).place(self.grid_v, self.grid_m)
+                block.dynamic(ti.indices(self.dim), 1024 * 1024, chunk_size=256).place(self.pid)
+            '''
 
         self.padding = padding
 
@@ -115,7 +123,7 @@ class MPMSolver:
         self.alpha = math.sqrt(2 / 3) * 2 * sin_phi / (3 - sin_phi)
 
         ti.root.dynamic(ti.i, max_num_particles,
-                        2**18).place(self.x, self.v, self.C, self.F,
+                        2**20).place(self.x, self.v, self.C, self.F,
                                      self.material, self.color, self.Jp)
 
         self.unbounded = unbounded
@@ -165,12 +173,26 @@ class MPMSolver:
                                          epsilon_hat_norm * epsilon_hat[i])
 
         return sigma_out
+    
+    @ti.kernel
+    def build_pid(self):
+        ti.block_dim(256)
+        for p in self.x:
+            base = ti.floor(self.x[p] * self.inv_dx - 0.5).cast(int)
+            l = ti.append(self.pid.parent(), base, p)
+            # print(l)
 
     @ti.kernel
     def p2g(self, dt: ti.f32):
-        ti.block_dim(512)
-        for p in self.x:
+        ti.block_dim(64)
+        ti.cache_shared(*self.grid_v.entries)
+        ti.cache_shared(self.grid_m)
+        # for p in self.x:
+        for I in ti.grouped(self.pid):
+            p = self.pid[I]
             base = ti.floor(self.x[p] * self.inv_dx - 0.5).cast(int)
+            for D in ti.static(range(self.dim)):
+                base[D] = ti.assume_in_range(base[D], I[D], 0, 1)
             fx = self.x[p] * self.inv_dx - base.cast(float)
             # Quadratic kernels  [http://mpm.graphics   Eqn. 123, with x=fx, fx-1,fx-2]
             w = [0.5 * (1.5 - fx)**2, 0.75 - (fx - 1)**2, 0.5 * (fx - 0.5)**2]
@@ -341,6 +363,7 @@ class MPMSolver:
             else:
                 self.grid_m.fill(0)
                 self.grid_v.fill(0)
+            self.build_pid()
             self.p2g(dt)
             self.grid_normalization_and_gravity(dt)
             for p in self.grid_postprocess:
