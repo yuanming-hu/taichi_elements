@@ -39,7 +39,7 @@ class MPMSolver:
     def __init__(self,
                  res,
                  size=1,
-                 max_num_particles=2**20,
+                 max_num_particles=2**25,
                  # Max 128 MB particles
                  padding=3,
                  unbounded=False):
@@ -78,36 +78,24 @@ class MPMSolver:
             indices = ti.ij
         else:
             indices = ti.ijk
+            
+        offset = tuple(-2048 for _ in range(self.dim))
 
-        if unbounded:
-            # grid node momentum/velocity
-            self.grid_v = ti.Vector(self.dim, dt=ti.f32)
-            # grid node mass
-            self.grid_m = ti.var(dt=ti.f32)
-            self.grid = ti.root.pointer(indices, 32)
-            if self.dim == 2:
-                block = self.grid.pointer(indices, 16)
-                voxel = block.dense(indices, 8)
-            else:
-                block = self.grid.pointer(indices, 32)
-                voxel = block.dense(indices, 4)
-                
-            voxel.place(self.grid_m, self.grid_v, offset=[-2048 for _ in range(self.dim)])
-            block.dynamic(ti.indices(self.dim), 1024 * 1024, chunk_size=4096).place(self.pid)
+        # grid node momentum/velocity
+        self.grid_v = ti.Vector(self.dim, dt=ti.f32)
+        # grid node mass
+        self.grid_m = ti.var(dt=ti.f32)
+        self.grid = ti.root.pointer(indices, 32)
+        if self.dim == 2:
+            block = self.grid.pointer(indices, 16)
+            voxel = block.dense(indices, 8)
         else:
-            raise NotImplementedError()
-            # grid node momentum/velocity
-            # if False: # Dense
-            self.grid_v = ti.Vector(self.dim, dt=ti.f32, shape=self.res)
-            # grid node mass
-            self.grid_m = ti.var(dt=ti.f32, shape=self.res)
-            '''
-            else:
-                block = ti.root.pointer(indices, [r // 4 for r in res])
-                block.dense(indices, 4).place(self.grid_v, self.grid_m)
-                block.dynamic(ti.indices(self.dim), 1024 * 1024, chunk_size=256).place(self.pid)
-            '''
-
+            block = self.grid.pointer(indices, 32)
+            voxel = block.dense(indices, 4)
+            
+        voxel.place(self.grid_m, self.grid_v, offset=offset)
+        block.dynamic(ti.indices(self.dim), 1024 * 1024, chunk_size=4096).place(self.pid, offset=offset + (0,))
+        
         self.padding = padding
 
         # Young's modulus and Poisson's ratio
@@ -142,6 +130,9 @@ class MPMSolver:
             self.set_gravity((0, -9.8, 0))
 
         self.grid_postprocess = []
+        
+        if not self.unbounded:
+            self.add_bounding_box()
 
     def stencil_range(self):
         return ti.ndrange(*((3, ) * self.dim))
@@ -179,20 +170,25 @@ class MPMSolver:
         ti.block_dim(256)
         for p in self.x:
             base = ti.floor(self.x[p] * self.inv_dx - 0.5).cast(int)
-            l = ti.append(self.pid.parent(), base, p)
-            # print(l)
+            # ti.append(self.pid.parent(), base + ti.Vector([2048, 2048]), p)
+            ti.append(self.pid.parent(), base, p)
 
     @ti.kernel
     def p2g(self, dt: ti.f32):
+        '''
         ti.block_dim(64)
-        ti.cache_shared(*self.grid_v.entries)
-        ti.cache_shared(self.grid_m)
+        # ti.cache_shared(*self.grid_v.entries)
+        # ti.cache_shared(self.grid_m)
         # for p in self.x:
         for I in ti.grouped(self.pid):
             p = self.pid[I]
             base = ti.floor(self.x[p] * self.inv_dx - 0.5).cast(int)
             for D in ti.static(range(self.dim)):
                 base[D] = ti.assume_in_range(base[D], I[D], 0, 1)
+        '''
+        ti.block_dim(64)
+        for p in self.x:
+            base = ti.floor(self.x[p] * self.inv_dx - 0.5).cast(int)
             fx = self.x[p] * self.inv_dx - base.cast(float)
             # Quadratic kernels  [http://mpm.graphics   Eqn. 123, with x=fx, fx-1,fx-2]
             w = [0.5 * (1.5 - fx)**2, 0.75 - (fx - 1)**2, 0.5 * (fx - 0.5)**2]
@@ -269,7 +265,7 @@ class MPMSolver:
                 self.grid_v[I] += dt * self.gravity[None]
 
     @ti.kernel
-    def grid_bounding_box(self):
+    def grid_bounding_box(self, dt: ti.f32):
         for I in ti.grouped(self.grid_m):
             for d in ti.static(range(self.dim)):
                 if I[d] < self.padding and self.grid_v[I][d] < 0:
@@ -331,9 +327,13 @@ class MPMSolver:
                         self.grid_v[I] = v
 
         self.grid_postprocess.append(collide)
+        
+    def add_bounding_box(self):
+        self.grid_postprocess.append(lambda dt: self.grid_bounding_box(dt))
 
     @ti.kernel
     def g2p(self, dt: ti.f32):
+        ti.block_dim(256)
         for p in self.x:
             base = ti.floor(self.x[p] * self.inv_dx - 0.5).cast(int)
             fx = self.x[p] * self.inv_dx - base.cast(float)
@@ -353,7 +353,7 @@ class MPMSolver:
                 new_C += 4 * self.inv_dx * weight * g_v.outer_product(dpos)
             self.v[p], self.C[p] = new_v, new_C
             self.x[p] += dt * self.v[p]  # advection
-
+            
     def step(self, frame_dt):
         substeps = int(frame_dt / self.default_dt) + 1
         for i in range(substeps):
@@ -364,12 +364,12 @@ class MPMSolver:
                 self.grid_m.fill(0)
                 self.grid_v.fill(0)
             self.build_pid()
+            # ti.kernel_profiler_print()
+            # exit()
             self.p2g(dt)
             self.grid_normalization_and_gravity(dt)
             for p in self.grid_postprocess:
                 p(dt)
-            if not self.unbounded:
-                self.grid_bounding_box()
             self.g2p(dt)
 
     @ti.func

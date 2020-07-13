@@ -6,22 +6,21 @@ from engine.mpm_solver import MPMSolver
 write_to_disk = False
 
 # Try to run on GPU
-ti.init(arch=ti.cuda, kernel_profiler=True, max_block_dim=256, print_ir=True, print_kernel_llvm_ir_optimized=True)
+ti.init(arch=ti.cuda)
 
-gui = ti.GUI("MPM Benchmark", res=256, background_color=0x112F41)
+gui = ti.GUI("Taichi MLS-MPM-99", res=512, background_color=0x112F41)
 
-mpm = MPMSolver(res=(256, 256, 256), size=1, unbounded=True)
+mpm = MPMSolver(res=(64, 64, 64), size=1)
 
-particles = np.fromfile('benchmark_particles.bin', dtype=np.float32)
-particles = particles.reshape(len(particles) // 3, 3)
-print(len(particles))
+triangles = np.fromfile('triangles.npy', dtype=np.float32)
+triangles = np.reshape(triangles, (len(triangles) // 9, 9)) * 0.306 + 0.501
 
-mpm.add_particles(particles=particles, material=MPMSolver.material_elastic, color=0xFFFF00)
+mpm.add_mesh(triangles=triangles, material=MPMSolver.material_elastic, color=0xFFFF00)
 
 mpm.set_gravity((0, -20, 0))
 
 for frame in range(1500):
-    mpm.step(3e-5)
+    mpm.step(4e-3)
     particles = mpm.particle_info()
     np_x = particles['position'] / 1.0
 
@@ -33,4 +32,3 @@ for frame in range(1500):
 
     gui.circles(screen_pos, radius=1.1, color=particles['color'])
     gui.show(f'{frame:06d}.png' if write_to_disk else None)
-    ti.kernel_profiler_print()

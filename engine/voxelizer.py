@@ -62,7 +62,7 @@ class Voxelizer:
             q_min = max(self.padding, q_min)
             q_max = min(self.res[1] - self.padding, q_max)
 
-            normal = ti.normalized(ti.cross(b - a, c - a))
+            normal = ((b - a).cross(c - a)).normalized()
             
             if abs(normal[2]) < 1e-10:
                 continue
@@ -77,7 +77,7 @@ class Voxelizer:
                     if inside_ccw(pos2d, a_proj, b_proj, c_proj) or inside_ccw(pos2d, a_proj, c_proj, b_proj):
                         base_voxel = ti.Vector([pos2d[0], pos2d[1], 0])
                         height = int(
-                            -ti.dot(normal, base_voxel - a) /
+                            -normal.dot(base_voxel - a) /
                             normal[2] * self.inv_dx + 0.5)
                         height = min(height, self.res[1] - self.padding)
                         inc = 0

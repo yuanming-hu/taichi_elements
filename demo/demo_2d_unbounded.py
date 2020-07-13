@@ -6,12 +6,12 @@ from engine.mpm_solver import MPMSolver
 
 write_to_disk = False
 
-ti.init(arch=ti.cuda)  # Try to run on GPU
+ti.init(arch=ti.cuda, debug=False, kernel_profiler=True)  # Try to run on GPU
 
 gui = ti.GUI("Taichi MLS-MPM-99", res=512, background_color=0x112F41)
 
 mpm = MPMSolver(res=(128, 128), unbounded=True)
-mpm.add_surface_collider(point=(0, 0), normal=(0.3, 1), surface=mpm.surface_slip)
+mpm.add_surface_collider(point=(0, 0.0), normal=(0.3, 1), surface=mpm.surface_slip)
 
 for i in range(3):
     mpm.add_cube(lower_corner=[0.2 + i * 0.1, 0.3 + i * 0.1],
@@ -41,3 +41,4 @@ for frame in range(500):
     pos = particles['position'] * 0.4 + 0.3
     gui.circles(pos, radius=0.75, color=colors[particles['material']])
     gui.show(f'{frame:06d}.png' if write_to_disk else None)
+    ti.kernel_profiler_print()
