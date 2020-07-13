@@ -363,7 +363,7 @@ class MPMSolver:
             else:
                 self.grid_m.fill(0)
                 self.grid_v.fill(0)
-            self.build_pid()
+            # self.build_pid()
             # ti.kernel_profiler_print()
             # exit()
             self.p2g(dt)
