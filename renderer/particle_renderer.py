@@ -45,7 +45,7 @@ dx = 1.0 / inv_dx
 
 camera_pos = ti.Vector([0.5, 0.27, 2.7])
 supporter = 2
-shutter_time = 0.5 # half the frame time (1e-3)
+shutter_time = 0.05 # half the frame time (1e-3)
 sphere_radius = 0.0015
 particle_grid_res = 256
 max_num_particles_per_cell = 8192 * 1024
@@ -443,8 +443,21 @@ def copy(img: ti.ext_arr(), samples: ti.i32):
             img[i, j, c] = ti.sqrt(color_buffer[i, j][c] * darken * exposure /
                                    samples)
 
+@ti.kernel
+def initialize_particle_x(x: ti.ext_arr(), v: ti.ext_arr(),
+                          color: ti.ext_arr()):
+    for i in range(num_particles[None]):
+        for c in ti.static(range(3)):
+            particle_x[i][c] = x[i, c]
+            particle_v[i][c] = v[i, c]
+            particle_color[i][c] = color[i, c]
+    
+        for k in ti.static(range(27)):
+            base_coord = (inv_dx * particle_x[i] - 0.5).cast(
+                ti.i32) + ti.Vector([k // 9, k // 3 % 3, k % 3])
+            grid_density[base_coord // grid_visualization_block_size] = 1
 
-def main():
+def initialize():
     num_part = 100000
     np_x = np.random.rand(num_part, 3).astype(np.float32) * 0.4 + 0.2
     np_v = np.random.rand(num_part, 3).astype(np.float32) * 0.1 - 0.05
@@ -452,7 +465,7 @@ def main():
     np_c[:, 0] = 0.85
     np_c[:, 1] = 0.9
     np_c[:, 2] = 1
-
+    
     for i in range(3):
         # bbox values must be multiples of dx
         # bbox values are the min and max particle coordinates, with 3 dx margin
@@ -460,27 +473,17 @@ def main():
                       3.0) / particle_grid_res
         bbox[1][i] = (math.floor(np_x[:, i].max() * particle_grid_res) +
                       3.0) / particle_grid_res
-
+    
     num_particles[None] = num_part
     print('num_input_particles =', num_part)
-
-    @ti.kernel
-    def initialize_particle_x(x: ti.ext_arr(), v: ti.ext_arr(),
-                              color: ti.ext_arr()):
-        for i in range(num_particles[None]):
-            for c in ti.static(range(3)):
-                particle_x[i][c] = x[i, c]
-                particle_v[i][c] = v[i, c]
-                particle_color[i][c] = color[i, c]
-
-            for k in ti.static(range(27)):
-                base_coord = (inv_dx * particle_x[i] - 0.5).cast(
-                    ti.i32) + ti.Vector([k // 9, k // 3 % 3, k % 3])
-                grid_density[base_coord // grid_visualization_block_size] = 1
-
+    
     initialize_particle_x(np_x, np_v * 10, np_c)
     initialize_particle_grid()
 
+
+def main():
+    initialize()
+    
     gui = ti.GUI('Particle Renderer', res)
 
     last_t = 0
@@ -501,3 +504,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+    ti.print_profile_info()

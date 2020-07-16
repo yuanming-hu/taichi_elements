@@ -80,6 +80,7 @@ class MPMSolver:
             indices = ti.ijk
             
         offset = tuple(-2048 for _ in range(self.dim))
+        self.offset = offset
 
         # grid node momentum/velocity
         self.grid_v = ti.Vector(self.dim, dt=ti.f32)
@@ -114,6 +115,7 @@ class MPMSolver:
                         2**20).place(self.x, self.v, self.C, self.F,
                                      self.material, self.color, self.Jp)
 
+        self.substeps = 0
         self.unbounded = unbounded
 
         if self.dim == 2:
@@ -170,25 +172,26 @@ class MPMSolver:
         ti.block_dim(256)
         for p in self.x:
             base = ti.floor(self.x[p] * self.inv_dx - 0.5).cast(int)
-            # ti.append(self.pid.parent(), base + ti.Vector([2048, 2048]), p)
-            ti.append(self.pid.parent(), base, p)
+            # print(base)
+            ti.append(self.pid.parent(), base - ti.Vector(list(self.offset)), p)
+            # ti.append(self.pid.parent(), base, p)
 
     @ti.kernel
     def p2g(self, dt: ti.f32):
-        '''
         ti.block_dim(64)
-        # ti.cache_shared(*self.grid_v.entries)
-        # ti.cache_shared(self.grid_m)
+        '''
+        for p in self.x:
+            base = ti.floor(self.x[p] * self.inv_dx - 0.5).cast(int)
+        '''
+        ti.cache_shared(*self.grid_v.entries)
+        ti.cache_shared(self.grid_m)
         # for p in self.x:
         for I in ti.grouped(self.pid):
             p = self.pid[I]
             base = ti.floor(self.x[p] * self.inv_dx - 0.5).cast(int)
             for D in ti.static(range(self.dim)):
                 base[D] = ti.assume_in_range(base[D], I[D], 0, 1)
-        '''
-        ti.block_dim(64)
-        for p in self.x:
-            base = ti.floor(self.x[p] * self.inv_dx - 0.5).cast(int)
+        
             fx = self.x[p] * self.inv_dx - base.cast(float)
             # Quadratic kernels  [http://mpm.graphics   Eqn. 123, with x=fx, fx-1,fx-2]
             w = [0.5 * (1.5 - fx)**2, 0.75 - (fx - 1)**2, 0.5 * (fx - 0.5)**2]
@@ -357,13 +360,15 @@ class MPMSolver:
     def step(self, frame_dt):
         substeps = int(frame_dt / self.default_dt) + 1
         for i in range(substeps):
+            self.substeps += 1
+            print(self.substeps)
             dt = frame_dt / substeps
             if self.unbounded:
                 self.grid.deactivate_all()
             else:
                 self.grid_m.fill(0)
                 self.grid_v.fill(0)
-            # self.build_pid()
+            self.build_pid()
             # ti.kernel_profiler_print()
             # exit()
             self.p2g(dt)
