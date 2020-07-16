@@ -172,7 +172,6 @@ class MPMSolver:
         ti.block_dim(256)
         for p in self.x:
             base = ti.floor(self.x[p] * self.inv_dx - 0.5).cast(int)
-            # print(base)
             ti.append(self.pid.parent(), base - ti.Vector(list(self.offset)), p)
             # ti.append(self.pid.parent(), base, p)
 
@@ -363,14 +362,10 @@ class MPMSolver:
             self.substeps += 1
             print(self.substeps)
             dt = frame_dt / substeps
-            if self.unbounded:
-                self.grid.deactivate_all()
-            else:
-                self.grid_m.fill(0)
-                self.grid_v.fill(0)
+            
+            self.grid.deactivate_all()
             self.build_pid()
-            # ti.kernel_profiler_print()
-            # exit()
+            
             self.p2g(dt)
             self.grid_normalization_and_gravity(dt)
             for p in self.grid_postprocess:
