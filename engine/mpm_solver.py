@@ -337,9 +337,13 @@ class MPMSolver:
 
     @ti.kernel
     def g2p(self, dt: ti.f32):
-        ti.block_dim(256)
-        for p in self.x:
+        ti.block_dim(64)
+        ti.cache_shared(*self.grid_v.entries)
+        for I in ti.grouped(self.pid):
+            p = self.pid[I]
             base = ti.floor(self.x[p] * self.inv_dx - 0.5).cast(int)
+            for D in ti.static(range(self.dim)):
+                base[D] = ti.assume_in_range(base[D], I[D], 0, 1)
             fx = self.x[p] * self.inv_dx - base.cast(float)
             w = [
                 0.5 * (1.5 - fx)**2, 0.75 - (fx - 1.0)**2, 0.5 * (fx - 0.5)**2
@@ -347,12 +351,12 @@ class MPMSolver:
             new_v = ti.Vector.zero(ti.f32, self.dim)
             new_C = ti.Matrix.zero(ti.f32, self.dim, self.dim)
             # loop over 3x3 grid node neighborhood
-            for I in ti.static(ti.grouped(self.stencil_range())):
-                dpos = I.cast(float) - fx
-                g_v = self.grid_v[base + I]
+            for offset in ti.static(ti.grouped(self.stencil_range())):
+                dpos = offset.cast(float) - fx
+                g_v = self.grid_v[base + offset]
                 weight = 1.0
                 for d in ti.static(range(self.dim)):
-                    weight *= w[I[d]][d]
+                    weight *= w[offset[d]][d]
                 new_v += weight * g_v
                 new_C += 4 * self.inv_dx * weight * g_v.outer_product(dpos)
             self.v[p], self.C[p] = new_v, new_C
