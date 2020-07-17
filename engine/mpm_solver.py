@@ -179,14 +179,9 @@ class MPMSolver:
 
     @ti.kernel
     def p2g(self, dt: ti.f32):
-        ti.block_dim(64)
-        '''
-        for p in self.x:
-            base = ti.floor(self.x[p] * self.inv_dx - 0.5).cast(int)
-        '''
+        ti.block_dim(256)
         ti.cache_shared(*self.grid_v.entries)
         ti.cache_shared(self.grid_m)
-        # for p in self.x:
         for I in ti.grouped(self.pid):
             p = self.pid[I]
             base = ti.floor(self.x[p] * self.inv_dx - 0.5).cast(int)
@@ -337,7 +332,7 @@ class MPMSolver:
 
     @ti.kernel
     def g2p(self, dt: ti.f32):
-        ti.block_dim(64)
+        ti.block_dim(256)
         ti.cache_shared(*self.grid_v.entries)
         for I in ti.grouped(self.pid):
             p = self.pid[I]
