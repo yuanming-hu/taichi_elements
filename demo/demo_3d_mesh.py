@@ -8,7 +8,7 @@ from engine.mpm_solver import MPMSolver
 write_to_disk = True
 
 # Try to run on GPU
-ti.init(arch=ti.cuda)
+ti.init(arch=ti.cuda, kernel_profiler=True)
 
 gui = ti.GUI("MLS-MPM", res=512, background_color=0x112F41)
 
@@ -65,3 +65,4 @@ for frame in range(1500):
 
     gui.circles(screen_pos, radius=1.1, color=particles['color'])
     gui.show(f'{frame:06d}.png' if write_to_disk else None)
+    ti.kernel_profiler_print()

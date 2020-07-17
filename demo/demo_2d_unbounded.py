@@ -2,12 +2,11 @@ import taichi as ti
 import numpy as np
 import utils
 import math
-import time
 from engine.mpm_solver import MPMSolver
 
 write_to_disk = False
 
-ti.init(arch=ti.cuda, use_unified_memory=False, kernel_profiler=True, device_memory_GB=4, debug=True)  # Try to run on GPU
+ti.init(arch=ti.cuda, use_unified_memory=False, kernel_profiler=True, device_memory_GB=4)  # Try to run on GPU
 
 gui = ti.GUI("Taichi MLS-MPM", res=512, background_color=0x112F41)
 

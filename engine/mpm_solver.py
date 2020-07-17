@@ -86,16 +86,19 @@ class MPMSolver:
         self.grid_v = ti.Vector(self.dim, dt=ti.f32)
         # grid node mass
         self.grid_m = ti.var(dt=ti.f32)
+        
         self.grid = ti.root.pointer(indices, 32)
+        
         if self.dim == 2:
-            block = self.grid.pointer(indices, 16)
-            voxel = block.dense(indices, 8)
+            self.leaf_block_size = 16
         else:
-            block = self.grid.pointer(indices, 32)
-            voxel = block.dense(indices, 4)
+            self.leaf_block_size = 8
+            
+        block = self.grid.pointer(indices, 128 // self.leaf_block_size)
+        voxel = block.dense(indices, self.leaf_block_size)
             
         voxel.place(self.grid_m, self.grid_v, offset=offset)
-        block.dynamic(ti.indices(self.dim), 1024 * 1024, chunk_size=4096).place(self.pid, offset=offset + (0,))
+        block.dynamic(ti.indices(self.dim), 1024 * 1024, chunk_size=self.leaf_block_size ** self.dim * 32).place(self.pid, offset=offset + (0,))
         
         self.padding = padding
 
@@ -115,7 +118,7 @@ class MPMSolver:
                         2**20).place(self.x, self.v, self.C, self.F,
                                      self.material, self.color, self.Jp)
 
-        self.substeps = 0
+        self.total_substeps = 0
         self.unbounded = unbounded
 
         if self.dim == 2:
@@ -169,11 +172,10 @@ class MPMSolver:
     
     @ti.kernel
     def build_pid(self):
-        ti.block_dim(256)
+        ti.block_dim(64)
         for p in self.x:
             base = ti.floor(self.x[p] * self.inv_dx - 0.5).cast(int)
             ti.append(self.pid.parent(), base - ti.Vector(list(self.offset)), p)
-            # ti.append(self.pid.parent(), base, p)
 
     @ti.kernel
     def p2g(self, dt: ti.f32):
@@ -359,13 +361,11 @@ class MPMSolver:
     def step(self, frame_dt):
         substeps = int(frame_dt / self.default_dt) + 1
         for i in range(substeps):
-            self.substeps += 1
-            print(self.substeps)
+            self.total_substeps += 1
             dt = frame_dt / substeps
             
             self.grid.deactivate_all()
             self.build_pid()
-            
             self.p2g(dt)
             self.grid_normalization_and_gravity(dt)
             for p in self.grid_postprocess:
