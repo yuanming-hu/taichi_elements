@@ -6,7 +6,7 @@ from engine.mpm_solver import MPMSolver
 
 write_to_disk = False
 
-ti.init(arch=ti.cuda, use_unified_memory=False, kernel_profiler=True, device_memory_GB=4)  # Try to run on GPU
+ti.init(arch=ti.cpu, use_unified_memory=False, kernel_profiler=True, device_memory_GB=4)  # Try to run on GPU
 
 gui = ti.GUI("Taichi MLS-MPM", res=512, background_color=0x112F41)
 

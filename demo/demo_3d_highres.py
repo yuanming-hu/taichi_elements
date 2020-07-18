@@ -55,6 +55,7 @@ for frame in range(1500):
     step = mpm.total_substeps
     mpm.step(4e-3)
     ti.kernel_profiler_print()
+    print(f'step time {time.time() - t} s')
     print(f'sub step time {1000 * (time.time() - t) / (mpm.total_substeps - step)}')
     particles = mpm.particle_info()
     np_x = particles['position'] / 1.0

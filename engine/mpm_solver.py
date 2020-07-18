@@ -95,9 +95,14 @@ class MPMSolver:
             self.leaf_block_size = 8
             
         block = self.grid.pointer(indices, 128 // self.leaf_block_size)
-        voxel = block.dense(indices, self.leaf_block_size)
+        
+        def block_component(c):
+            block.dense(indices, self.leaf_block_size).place(c, offset=offset)
             
-        voxel.place(self.grid_m, self.grid_v, offset=offset)
+        block_component(self.grid_m)
+        for v in self.grid_v.entries:
+            block_component(v)
+            
         block.dynamic(ti.indices(self.dim), 1024 * 1024, chunk_size=self.leaf_block_size ** self.dim * 32).place(self.pid, offset=offset + (0,))
         
         self.padding = padding
@@ -107,15 +112,15 @@ class MPMSolver:
         # Lame parameters
         self.mu_0, self.lambda_0 = self.E / (
             2 * (1 + self.nu)), self.E * self.nu / ((1 + self.nu) *
-                                                    (1 - 2 * self.nu))
+                                                     (1 - 2 * self.nu))
 
         # Sand parameters
         friction_angle = math.radians(45)
         sin_phi = math.sin(friction_angle)
         self.alpha = math.sqrt(2 / 3) * 2 * sin_phi / (3 - sin_phi)
 
-        ti.root.dynamic(ti.i, max_num_particles,
-                        2**20).place(self.x, self.v, self.C, self.F,
+        self.particle = ti.root.dynamic(ti.i, max_num_particles, 2**20)
+        self.particle.place(self.x, self.v, self.C, self.F,
                                      self.material, self.color, self.Jp)
 
         self.total_substeps = 0
@@ -172,13 +177,14 @@ class MPMSolver:
     
     @ti.kernel
     def build_pid(self):
-        ti.block_dim(64)
+        ti.block_dim(256)
         for p in self.x:
-            base = ti.floor(self.x[p] * self.inv_dx - 0.5).cast(int)
+            base = ti.floor(self.x[p] * self.inv_dx - 1.5).cast(int)
             ti.append(self.pid.parent(), base - ti.Vector(list(self.offset)), p)
 
     @ti.kernel
     def p2g(self, dt: ti.f32):
+        ti.no_activate(self.particle)
         ti.block_dim(256)
         ti.cache_shared(*self.grid_v.entries)
         ti.cache_shared(self.grid_m)
@@ -186,7 +192,7 @@ class MPMSolver:
             p = self.pid[I]
             base = ti.floor(self.x[p] * self.inv_dx - 0.5).cast(int)
             for D in ti.static(range(self.dim)):
-                base[D] = ti.assume_in_range(base[D], I[D], 0, 1)
+                base[D] = ti.assume_in_range(base[D], I[D], 1, 2)
         
             fx = self.x[p] * self.inv_dx - base.cast(float)
             # Quadratic kernels  [http://mpm.graphics   Eqn. 123, with x=fx, fx-1,fx-2]
@@ -334,11 +340,12 @@ class MPMSolver:
     def g2p(self, dt: ti.f32):
         ti.block_dim(256)
         ti.cache_shared(*self.grid_v.entries)
+        ti.no_activate(self.particle)
         for I in ti.grouped(self.pid):
             p = self.pid[I]
             base = ti.floor(self.x[p] * self.inv_dx - 0.5).cast(int)
             for D in ti.static(range(self.dim)):
-                base[D] = ti.assume_in_range(base[D], I[D], 0, 1)
+                base[D] = ti.assume_in_range(base[D], I[D], 1, 2)
             fx = self.x[p] * self.inv_dx - base.cast(float)
             w = [
                 0.5 * (1.5 - fx)**2, 0.75 - (fx - 1.0)**2, 0.5 * (fx - 0.5)**2
