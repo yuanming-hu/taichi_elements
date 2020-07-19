@@ -45,7 +45,9 @@ camera_pos = ti.Vector([0.5, 0.27, 2.7])
 supporter = 2
 shutter_time = 0.05 # half the frame time (1e-3)
 sphere_radius = 0.0015
-particle_grid_res = 512
+particle_grid_res = 1024
+particle_grid_offset = [-particle_grid_res // 2 for i in range(3)]
+
 grid_visualization_block_size = 16
 grid_resolution = particle_grid_res // grid_visualization_block_size
 max_num_particles_per_cell = 8192 * 1024
@@ -55,15 +57,17 @@ assert sphere_radius * 2 < dx
 
 ti.root.dense(ti.ij, res).place(color_buffer)
 
-ti.root.dense(ti.ijk, particle_grid_res // 8).dense(
-    ti.ijk, 8).place(voxel_has_particle)
 
 particle_bucket = ti.root.pointer(ti.ijk, particle_grid_res // 8)
 particle_bucket.dense(
-    ti.ijk, 8).dynamic(ti.l, max_num_particles_per_cell, 512).place(pid)
+    ti.ijk, 8).dynamic(ti.l, max_num_particles_per_cell, 32).place(pid)
 
 ti.root.dense(ti.l, max_num_particles).place(particle_x, particle_v,
                                              particle_color)
+
+ti.root.pointer(ti.ijk, particle_grid_res // 8).dense(
+    ti.ijk, 8).place(voxel_has_particle)
+
 ti.root.pointer(ti.ijk, grid_resolution // 8).dense(ti.ijk, 8).place(grid_density)
 
 
@@ -459,8 +463,8 @@ def initialize_particle_x(x: ti.ext_arr(), v: ti.ext_arr(),
 def initialize(f):
     particle_bucket.deactivate_all()
     grid_density.snode().parent(n=2).deactivate_all()
+    voxel_has_particle.snode().parent(n=2).deactivate_all()
     color_buffer.fill(0)
-    voxel_has_particle.fill(0)
     
     num_part = 100000
     
