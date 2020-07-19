@@ -2,6 +2,7 @@ import taichi as ti
 import time
 import numpy as np
 from plyfile import PlyData, PlyElement
+import os
 import utils
 from engine.mpm_solver import MPMSolver
 
@@ -11,6 +12,9 @@ write_to_disk = True
 ti.init(arch=ti.cuda, kernel_profiler=True)
 
 gui = ti.GUI("MLS-MPM", res=512, background_color=0x112F41)
+
+output_dir = 'output_particles'
+os.makedirs(output_dir, exist_ok=True)
 
 
 def load_mesh(fn, scale, offset):
@@ -68,3 +72,7 @@ for frame in range(1500):
 
     gui.circles(screen_pos, radius=1.1, color=particles['color'])
     gui.show(f'{frame:06d}.png' if write_to_disk else None)
+    
+    
+    output_fn = f'{output_dir}/{frame:05d}.npz'
+    np.savez_compressed(output_fn, x=particles['position'], v=particles['velocity'], c=particles['color'])

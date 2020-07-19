@@ -2,10 +2,13 @@ import taichi as ti
 import numpy as np
 import math
 import time
+import os
 from renderer_utils import out_dir, ray_aabb_intersection, inf, eps, \
   intersect_sphere, sphere_aabb_intersect_motion, inside_taichi
 
-ti.init(arch=ti.cuda, use_unified_memory=False, device_memory_GB=8, debug=True)
+ti.init(arch=ti.cuda, use_unified_memory=False, device_memory_GB=8)
+
+os.makedirs('rendered', exist_ok=True)
 
 res = 1280, 720
 num_spheres = 1024
@@ -43,7 +46,8 @@ dx = 1.0 / inv_dx
 
 camera_pos = ti.Vector([0.5, 0.27, 2.7])
 supporter = 2
-shutter_time = 0.05 # half the frame time (1e-3)
+# shutter_time = 2e-3 # half the frame time
+shutter_time = 0 # half the frame time
 sphere_radius = 0.0015
 particle_grid_res = 1024
 particle_grid_offset = [-particle_grid_res // 2 for _ in range(3)]
@@ -60,10 +64,7 @@ ti.root.dense(ti.ij, res).place(color_buffer)
 
 particle_bucket = ti.root.pointer(ti.ijk, particle_grid_res // 8)
 particle_bucket.dense(
-    ti.ijk, 8).dynamic(ti.l, max_num_particles_per_cell, 32).place(pid, offset=particle_grid_offset+[0])
-
-print(particle_grid_offset)
-print(voxel_grid_offset)
+    ti.ijk, 8).dynamic(ti.l, max_num_particles_per_cell, 256).place(pid, offset=particle_grid_offset+[0])
 
 ti.root.pointer(ti.ijk, particle_grid_res // 8).dense(
     ti.ijk, 8).place(voxel_has_particle, offset=particle_grid_offset)
@@ -128,7 +129,7 @@ def sdf(o):
         o -= ti.Vector([0.5, 0.002, 0.5])
         dist = (o.abs() - ti.Vector([0.5, 0.02, 0.5])).max()
     else:
-        dist = o[1] - 0.027
+        dist = o[1] - 0.007
 
     return dist
 
@@ -452,7 +453,7 @@ def initialize_particle_x(x: ti.ext_arr(), v: ti.ext_arr(),
         for c in ti.static(range(3)):
             particle_x[i][c] = x[i, c]
             particle_v[i][c] = v[i, c]
-            particle_color[i][c] = color[i, c]
+            particle_color[i][c] = (color[i] // 256 ** (2 - c)) % 256 * (1 / 255)
     
         for k in ti.static(range(27)):
             base_coord = (inv_dx * particle_x[i] - 0.5).cast(
@@ -465,19 +466,26 @@ def initialize(f):
     voxel_has_particle.snode().parent(n=2).deactivate_all()
     color_buffer.fill(0)
     
-    num_part = 100000
+    rand = False
     
+    if rand:
+        num_part = 100000
+        s = (1 + f) * 0.5
+        np_x = (np.random.rand(num_part, 3).astype(np.float32)) * s - 0.2
+        # np_x[1] += 0.5# * (s + )
+        np_v = np.random.rand(num_part, 3).astype(np.float32) * 0.1 - 0.05
+        np_c = np.zeros(num_part).astype(np.int32)
+        np_c[:] = int(0.85 * 256) * 256 ** 2 + int(0.9 * 256) * 256 + int(0.98 * 256)
+    else:
+        data = np.load(f'output_particles/{f:05d}.npz')
+        np_x = data['x']
+        num_part = len(np_x)
+        np_v = data['v']
+        np_c = data['c']
+
     assert num_part <= max_num_particles
-    
-    s = (1 + f) * 0.5
-    np_x = (np.random.rand(num_part, 3).astype(np.float32)) * s - 0.2
-    # np_x[1] += 0.5# * (s + )
-    np_v = np.random.rand(num_part, 3).astype(np.float32) * 0.1 - 0.05
-    np_c = np.zeros((num_part, 3)).astype(np.float32)
-    np_c[:, 0] = 0.85
-    np_c[:, 1] = 0.9
-    np_c[:, 2] = 1
-    
+
+
     for i in range(3):
         # bbox values must be multiples of dx
         # bbox values are the min and max particle coordinates, with 3 dx margin
@@ -494,7 +502,7 @@ def initialize(f):
 
 gui = ti.GUI('Particle Renderer', res)
 
-def render_frame(spp):
+def render_frame(f, spp):
     t = time.time()
     last_t = 0
     for i in range(1, 1 + spp):
@@ -509,14 +517,14 @@ def render_frame(spp):
                     (time.time() - last_t) * 1000 / interval))
             last_t = time.time()
             gui.set_image(img)
-            gui.show()
+            gui.show(f'rendered/{f:05d}.png')
     print(f'Frame rendered. {spp} take {time.time() - t} s.')
 
 def main():
-    for f in range(100):
+    for f in range(0, 1000, 2):
         print(f'frame {f}')
         initialize(f)
-        render_frame(50)
+        render_frame(f, 50)
         
 if __name__ == '__main__':
     main()
