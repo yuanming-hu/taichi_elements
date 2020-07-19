@@ -47,7 +47,7 @@ dx = 1.0 / inv_dx
 camera_pos = ti.Vector([0.5, 0.27, 2.7])
 supporter = 2
 # shutter_time = 2e-3 # half the frame time
-shutter_time = 0 # half the frame time
+shutter_time = 2e-4 # half the frame time
 sphere_radius = 0.0015
 particle_grid_res = 1024
 particle_grid_offset = [-particle_grid_res // 2 for _ in range(3)]
@@ -521,7 +521,7 @@ def render_frame(f, spp):
     print(f'Frame rendered. {spp} take {time.time() - t} s.')
 
 def main():
-    for f in range(0, 1000, 2):
+    for f in range(0, 1000, 10):
         print(f'frame {f}')
         initialize(f)
         render_frame(f, 50)
