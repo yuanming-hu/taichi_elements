@@ -64,8 +64,7 @@ particle_bucket.dense(
 
 ti.root.dense(ti.l, max_num_particles).place(particle_x, particle_v,
                                              particle_color)
-ti.root.dense(ti.ijk, grid_resolution // 8).dense(ti.ijk,
-                                                  8).place(grid_density)
+ti.root.pointer(ti.ijk, grid_resolution // 8).dense(ti.ijk, 8).place(grid_density)
 
 
 @ti.func
@@ -459,7 +458,7 @@ def initialize_particle_x(x: ti.ext_arr(), v: ti.ext_arr(),
 
 def initialize(f):
     particle_bucket.deactivate_all()
-    grid_density.fill(0)
+    grid_density.snode().parent(n=2).deactivate_all()
     color_buffer.fill(0)
     voxel_has_particle.fill(0)
     
@@ -467,7 +466,9 @@ def initialize(f):
     
     assert num_part <= max_num_particles
     
-    np_x = np.random.rand(num_part, 3).astype(np.float32) * 0.4 * (1 + f * 0.5) + 0.2
+    s = (1 + f) * 0.5
+    np_x = (np.random.rand(num_part, 3).astype(np.float32)) * s + 0.2
+    # np_x[1] += 0.5# * (s + )
     np_v = np.random.rand(num_part, 3).astype(np.float32) * 0.1 - 0.05
     np_c = np.zeros((num_part, 3)).astype(np.float32)
     np_c[:, 0] = 0.85
