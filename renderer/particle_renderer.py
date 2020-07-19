@@ -58,7 +58,8 @@ ti.root.dense(ti.ij, (res[0] // 8, res[1] // 8)).dense(ti.ij,
 
 ti.root.dense(ti.ijk, 2).dense(ti.ijk, particle_grid_res // 8).dense(
     ti.ijk, 8).place(voxel_has_particle)
-ti.root.dense(ti.ijk, 4).pointer(ti.ijk, particle_grid_res // 8).dense(
+particle_bucket = ti.root.dense(ti.ijk, 4).pointer(ti.ijk, particle_grid_res // 8)
+particle_bucket.dense(
     ti.ijk, 8).dynamic(ti.l, max_num_particles_per_cell, 512).place(pid)
 
 ti.root.dense(ti.l, max_num_particles).place(particle_x, particle_v,
@@ -458,6 +459,10 @@ def initialize_particle_x(x: ti.ext_arr(), v: ti.ext_arr(),
             grid_density[base_coord // grid_visualization_block_size] = 1
 
 def initialize():
+    particle_bucket.deactivate_all()
+    grid_density.fill(0)
+    color_buffer.fill(0)
+    
     num_part = 100000
     np_x = np.random.rand(num_part, 3).astype(np.float32) * 0.4 + 0.2
     np_v = np.random.rand(num_part, 3).astype(np.float32) * 0.1 - 0.05
@@ -480,16 +485,14 @@ def initialize():
     initialize_particle_x(np_x, np_v * 10, np_c)
     initialize_particle_grid()
 
+gui = ti.GUI('Particle Renderer', res)
 
-def main():
-    initialize()
-    
-    gui = ti.GUI('Particle Renderer', res)
-
+def render_frame(spp):
+    t = time.time()
     last_t = 0
-    for i in range(500):
+    for i in range(spp):
         render()
-
+        
         interval = 10
         if i % interval == 0:
             img = np.zeros((res[0], res[1], 3), dtype=np.float32)
@@ -500,6 +503,13 @@ def main():
             last_t = time.time()
             gui.set_image(img)
             gui.show()
+    print(f'Frame rendered. {spp} take {time.time() - t} s.')
+
+def main():
+    while True:
+        initialize()
+        render_frame(50)
+        
 
 
 if __name__ == '__main__':
