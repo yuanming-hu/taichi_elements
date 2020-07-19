@@ -5,7 +5,7 @@ import time
 from renderer_utils import out_dir, ray_aabb_intersection, inf, eps, \
   intersect_sphere, sphere_aabb_intersect_motion, inside_taichi
 
-ti.init(arch=ti.cuda, device_memory_GB=4)
+ti.init(arch=ti.cuda, debug=True)
 
 res = 1280, 720
 num_spheres = 1024
@@ -49,7 +49,7 @@ shutter_time = 0.05 # half the frame time (1e-3)
 sphere_radius = 0.0015
 particle_grid_res = 256
 max_num_particles_per_cell = 8192 * 1024
-max_num_particles = 1024 * 1024 * 4
+max_num_particles = 1024 * 1024 * 8
 
 assert sphere_radius * 2 * particle_grid_res < 1
 
@@ -458,13 +458,17 @@ def initialize_particle_x(x: ti.ext_arr(), v: ti.ext_arr(),
                 ti.i32) + ti.Vector([k // 9, k // 3 % 3, k % 3])
             grid_density[base_coord // grid_visualization_block_size] = 1
 
-def initialize():
+def initialize(f):
     particle_bucket.deactivate_all()
     grid_density.fill(0)
     color_buffer.fill(0)
+    voxel_has_particle.fill(0)
     
-    num_part = 100000
-    np_x = np.random.rand(num_part, 3).astype(np.float32) * 0.4 + 0.2
+    num_part = 5000000
+    
+    assert num_part <= max_num_particles
+    
+    np_x = np.random.rand(num_part, 3).astype(np.float32) * 0.4 * (1 + f * 0.5) + 0.2
     np_v = np.random.rand(num_part, 3).astype(np.float32) * 0.1 - 0.05
     np_c = np.zeros((num_part, 3)).astype(np.float32)
     np_c[:, 0] = 0.85
@@ -490,7 +494,7 @@ gui = ti.GUI('Particle Renderer', res)
 def render_frame(spp):
     t = time.time()
     last_t = 0
-    for i in range(spp):
+    for i in range(1, 1 + spp):
         render()
         
         interval = 10
@@ -506,8 +510,8 @@ def render_frame(spp):
     print(f'Frame rendered. {spp} take {time.time() - t} s.')
 
 def main():
-    while True:
-        initialize()
+    for f in range(100):
+        initialize(f)
         render_frame(50)
         
 
