@@ -11,7 +11,7 @@ res = 1280, 720
 num_spheres = 1024
 color_buffer = ti.Vector(3, dt=ti.f32)
 bbox = ti.Vector(3, dt=ti.f32, shape=2)
-grid_density = ti.var(dt=ti.i32)
+voxel_grid_density = ti.var(dt=ti.i32)
 voxel_has_particle = ti.var(dt=ti.i32)
 max_ray_depth = 4
 use_directional_light = True
@@ -46,10 +46,11 @@ supporter = 2
 shutter_time = 0.05 # half the frame time (1e-3)
 sphere_radius = 0.0015
 particle_grid_res = 1024
-particle_grid_offset = [-particle_grid_res // 2 for i in range(3)]
+particle_grid_offset = [-particle_grid_res // 2 for _ in range(3)]
 
-grid_visualization_block_size = 16
-grid_resolution = particle_grid_res // grid_visualization_block_size
+voxel_grid_visualization_block_size = 16
+voxel_grid_res = particle_grid_res // voxel_grid_visualization_block_size
+voxel_grid_offset = [-voxel_grid_res // 2 for _ in range(3)]
 max_num_particles_per_cell = 8192 * 1024
 max_num_particles = 1024 * 1024 * 8
 
@@ -57,30 +58,30 @@ assert sphere_radius * 2 < dx
 
 ti.root.dense(ti.ij, res).place(color_buffer)
 
-
 particle_bucket = ti.root.pointer(ti.ijk, particle_grid_res // 8)
 particle_bucket.dense(
-    ti.ijk, 8).dynamic(ti.l, max_num_particles_per_cell, 32).place(pid)
+    ti.ijk, 8).dynamic(ti.l, max_num_particles_per_cell, 32).place(pid, offset=particle_grid_offset+[0])
 
-ti.root.dense(ti.l, max_num_particles).place(particle_x, particle_v,
-                                             particle_color)
+print(particle_grid_offset)
+print(voxel_grid_offset)
 
 ti.root.pointer(ti.ijk, particle_grid_res // 8).dense(
-    ti.ijk, 8).place(voxel_has_particle)
+    ti.ijk, 8).place(voxel_has_particle, offset=particle_grid_offset)
+ti.root.pointer(ti.ijk, voxel_grid_res // 8).dense(ti.ijk, 8).place(voxel_grid_density, offset=voxel_grid_offset)
 
-ti.root.pointer(ti.ijk, grid_resolution // 8).dense(ti.ijk, 8).place(grid_density)
+ti.root.dense(ti.l, max_num_particles).place(particle_x, particle_v, particle_color)
 
 
 @ti.func
 def inside_grid(ipos):
-    return ipos.min() >= 0 and ipos.max() < grid_resolution
+    return ipos.min() >= 0 and ipos.max() < voxel_grid_res
 
 
 # The dda algorithm requires the voxel grid to have one surrounding layer of void region
 # to correctly render the outmost voxel faces
 @ti.func
 def inside_grid_loose(ipos):
-    return ipos.min() >= -1 and ipos.max() <= grid_resolution
+    return ipos.min() >= -1 and ipos.max() <= voxel_grid_res
 
 
 @ti.func
@@ -88,7 +89,7 @@ def query_density_int(ipos):
     inside = inside_grid(ipos)
     ret = 0
     if inside:
-        ret = grid_density[ipos]
+        ret = voxel_grid_density[ipos]
     else:
         ret = 0
     return ret
@@ -96,7 +97,7 @@ def query_density_int(ipos):
 
 @ti.func
 def voxel_color(pos):
-    p = pos * grid_resolution
+    p = pos * voxel_grid_res
 
     p -= ti.floor(p)
 
@@ -191,7 +192,7 @@ def dda(eye_pos, d):
 
         pos = eye_pos + d * (near + 5 * eps)
 
-        o = grid_resolution * pos
+        o = voxel_grid_res * pos
         ipos = ti.floor(o).cast(int)
         dis = (ipos - o + 0.5 + rsign * 0.5) * rinv
         running = 1
@@ -206,7 +207,7 @@ def dda(eye_pos, d):
             if last_sample:
                 mini = (ipos - o + ti.Vector([0.5, 0.5, 0.5]) -
                         rsign * 0.5) * rinv
-                hit_distance = mini.max() * (1 / grid_resolution) + near
+                hit_distance = mini.max() * (1 / voxel_grid_res) + near
                 hit_pos = eye_pos + hit_distance * d
                 c = voxel_color(hit_pos)
                 running = 0
@@ -236,8 +237,6 @@ def inside_particle_grid(ipos):
 # DDA for the particle visualization (render_voxels=False)
 @ti.func
 def dda_particle(eye_pos, d, t):
-    grid_res = particle_grid_res
-
     # bounding box
     bbox_min = bbox[0]
     bbox_max = bbox[1]
@@ -277,9 +276,9 @@ def dda_particle(eye_pos, d, t):
                 # once we actually intersect with a voxel that contains at least one particle, loop over the particle list
                 num_particles = voxel_has_particle[ipos]
                 if num_particles != 0:
-                    num_particles = ti.length(pid.parent(), ipos)
+                    num_particles = ti.length(pid.parent(), ipos - ti.Vector(particle_grid_offset))
                 for k in range(num_particles):
-                    p = pid[ipos[0], ipos[1], ipos[2], k]
+                    p = pid[ipos, k]
                     v = particle_v[p]
                     x = particle_x[p] + t * v
                     color = particle_color[p]
@@ -428,7 +427,7 @@ def initialize_particle_grid():
                         if sphere_aabb_intersect_motion(
                                 box_min, box_max, x - 0.5 * shutter_time * v,
                                 x + 0.5 * shutter_time * v, sphere_radius):
-                            ti.append(pid.parent(), box_ipos, p)
+                            ti.append(pid.parent(), box_ipos - ti.Vector(particle_grid_offset), p)
                             voxel_has_particle[box_ipos] = 1
 
 
@@ -458,11 +457,11 @@ def initialize_particle_x(x: ti.ext_arr(), v: ti.ext_arr(),
         for k in ti.static(range(27)):
             base_coord = (inv_dx * particle_x[i] - 0.5).cast(
                 ti.i32) + ti.Vector([k // 9, k // 3 % 3, k % 3])
-            grid_density[base_coord // grid_visualization_block_size] = 1
+            voxel_grid_density[base_coord // voxel_grid_visualization_block_size] = 1
 
 def initialize(f):
     particle_bucket.deactivate_all()
-    grid_density.snode().parent(n=2).deactivate_all()
+    voxel_grid_density.snode().parent(n=2).deactivate_all()
     voxel_has_particle.snode().parent(n=2).deactivate_all()
     color_buffer.fill(0)
     
@@ -471,7 +470,7 @@ def initialize(f):
     assert num_part <= max_num_particles
     
     s = (1 + f) * 0.5
-    np_x = (np.random.rand(num_part, 3).astype(np.float32)) * s + 0.2
+    np_x = (np.random.rand(num_part, 3).astype(np.float32)) * s - 0.2
     # np_x[1] += 0.5# * (s + )
     np_v = np.random.rand(num_part, 3).astype(np.float32) * 0.1 - 0.05
     np_c = np.zeros((num_part, 3)).astype(np.float32)
