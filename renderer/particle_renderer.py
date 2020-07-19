@@ -5,7 +5,7 @@ import time
 from renderer_utils import out_dir, ray_aabb_intersection, inf, eps, \
   intersect_sphere, sphere_aabb_intersect_motion, inside_taichi
 
-ti.init(arch=ti.cuda, debug=True)
+ti.init(arch=ti.cuda, use_unified_memory=False, device_memory_GB=8, debug=True)
 
 res = 1280, 720
 num_spheres = 1024
@@ -34,8 +34,6 @@ light_direction = [1.2, 0.3, 0.7]
 light_direction_noise = 0.03
 light_color = [1.0, 1.0, 1.0]
 
-grid_visualization_block_size = 16
-grid_resolution = 256 // grid_visualization_block_size
 
 frame_id = 0
 
@@ -47,18 +45,20 @@ camera_pos = ti.Vector([0.5, 0.27, 2.7])
 supporter = 2
 shutter_time = 0.05 # half the frame time (1e-3)
 sphere_radius = 0.0015
-particle_grid_res = 256
+particle_grid_res = 512
+grid_visualization_block_size = 16
+grid_resolution = particle_grid_res // grid_visualization_block_size
 max_num_particles_per_cell = 8192 * 1024
 max_num_particles = 1024 * 1024 * 8
 
-assert sphere_radius * 2 * particle_grid_res < 1
+assert sphere_radius * 2 < dx
 
-ti.root.dense(ti.ij, (res[0] // 8, res[1] // 8)).dense(ti.ij,
-                                                       8).place(color_buffer)
+ti.root.dense(ti.ij, res).place(color_buffer)
 
-ti.root.dense(ti.ijk, 2).dense(ti.ijk, particle_grid_res // 8).dense(
+ti.root.dense(ti.ijk, particle_grid_res // 8).dense(
     ti.ijk, 8).place(voxel_has_particle)
-particle_bucket = ti.root.dense(ti.ijk, 4).pointer(ti.ijk, particle_grid_res // 8)
+
+particle_bucket = ti.root.pointer(ti.ijk, particle_grid_res // 8)
 particle_bucket.dense(
     ti.ijk, 8).dynamic(ti.l, max_num_particles_per_cell, 512).place(pid)
 
@@ -262,7 +262,7 @@ def dda_particle(eye_pos, d, t):
             else:
                 rsign[i] = -1
 
-        o = grid_res * pos
+        o = inv_dx * pos
         ipos = ti.floor(o).cast(int)
         dis = (ipos - o + 0.5 + rsign * 0.5) * rinv
         running = 1
@@ -413,16 +413,15 @@ def initialize_particle_grid():
     for p in range(num_particles[None]):
         x = particle_x[p]
         v = particle_v[p]
-        ipos = ti.floor(x * particle_grid_res).cast(ti.i32)
+        ipos = ti.floor(x * inv_dx).cast(ti.i32)
         for i in range(-support, support + 1):
             for j in range(-support, support + 1):
                 for k in range(-support, support + 1):
                     offset = ti.Vector([i, j, k])
                     box_ipos = ipos + offset
                     if inside_particle_grid(box_ipos):
-                        box_min = box_ipos * (1 / particle_grid_res)
-                        box_max = (box_ipos + ti.Vector([1, 1, 1])) * (
-                            1 / particle_grid_res)
+                        box_min = box_ipos * dx
+                        box_max = (box_ipos + ti.Vector([1, 1, 1])) * dx
                         if sphere_aabb_intersect_motion(
                                 box_min, box_max, x - 0.5 * shutter_time * v,
                                 x + 0.5 * shutter_time * v, sphere_radius):
@@ -464,7 +463,7 @@ def initialize(f):
     color_buffer.fill(0)
     voxel_has_particle.fill(0)
     
-    num_part = 5000000
+    num_part = 100000
     
     assert num_part <= max_num_particles
     
@@ -478,10 +477,10 @@ def initialize(f):
     for i in range(3):
         # bbox values must be multiples of dx
         # bbox values are the min and max particle coordinates, with 3 dx margin
-        bbox[0][i] = (math.floor(np_x[:, i].min() * particle_grid_res) -
-                      3.0) / particle_grid_res
-        bbox[1][i] = (math.floor(np_x[:, i].max() * particle_grid_res) +
-                      3.0) / particle_grid_res
+        bbox[0][i] = (math.floor(np_x[:, i].min() * inv_dx) -
+                      3.0) * dx
+        bbox[1][i] = (math.floor(np_x[:, i].max() * inv_dx) +
+                      3.0) * dx
     
     num_particles[None] = num_part
     print('num_input_particles =', num_part)
@@ -511,11 +510,10 @@ def render_frame(spp):
 
 def main():
     for f in range(100):
+        print(f'frame {f}')
         initialize(f)
         render_frame(50)
         
-
-
 if __name__ == '__main__':
     main()
     ti.print_profile_info()
