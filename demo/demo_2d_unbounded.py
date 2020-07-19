@@ -6,11 +6,11 @@ from engine.mpm_solver import MPMSolver
 
 write_to_disk = False
 
-ti.init(arch=ti.cpu, use_unified_memory=False, kernel_profiler=True, device_memory_GB=4)  # Try to run on GPU
+ti.init(arch=ti.gpu, kernel_profiler=True)  # Try to run on GPU
 
 gui = ti.GUI("Taichi MLS-MPM", res=512, background_color=0x112F41)
 
-mpm = MPMSolver(res=(128, 128), unbounded=False)
+mpm = MPMSolver(res=(128, 128), unbounded=True)
 mpm.add_surface_collider(point=(0, 0.0), normal=(0.3, 1), surface=mpm.surface_slip)
 
 for i in range(3):
