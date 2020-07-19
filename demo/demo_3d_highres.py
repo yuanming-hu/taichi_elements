@@ -10,7 +10,7 @@ from engine.mpm_solver import MPMSolver
 write_to_disk = False
 
 # Try to run on GPU
-ti.init(arch=ti.cuda, kernel_profiler=True)
+ti.init(arch=ti.cuda, kernel_profiler=True, debug=True)
 
 gui = ti.GUI("MLS-MPM", res=512, background_color=0x112F41)
 
@@ -40,17 +40,11 @@ def load_mesh(fn, scale, offset):
     return triangles
 
 
-R = 256
+R = 512
 
 mpm = MPMSolver(res=(R, R, R), size=1, unbounded=False)
 
 # mpm.add_surface_collider(point=(0, 0, 0), normal=(0, 1, 0), surface=mpm.surface_slip)
-
-triangles = load_mesh('nvidia.ply', scale=0.05, offset=(0.5, 0.3, 0.5))
-mpm.add_mesh(triangles=triangles,
-             material=MPMSolver.material_elastic,
-             color=0x76B90B,
-             velocity=(0, -1, 0))
 
 triangles = load_mesh('taichi.ply', scale=0.05, offset=(0.5, 0.6, 0.5))
 mpm.add_mesh(triangles=triangles,
@@ -58,20 +52,22 @@ mpm.add_mesh(triangles=triangles,
              color=0xDDEEFF,
              velocity=(0, -1, 0))
 
-
-triangles = load_mesh('mlsmpm.ply', scale=0.05, offset=(0.5, 0.9, 0.5))
+triangles = load_mesh('nvidia.ply', scale=0.05, offset=(0.5, 0.3, 0.5))
 mpm.add_mesh(triangles=triangles,
-             material=MPMSolver.material_sand,
-             color=0xFF11cc,
+             material=MPMSolver.material_elastic,
+             color=0x76B90B,
              velocity=(0, -1, 0))
 
-mpm.set_gravity((0, -20, 0))
+
+mpm.set_gravity((0, -25, 0))
 
 n_balls = 5
 water_ball_start = 100
 
+snow_brick_start = 150
 
-def add_snowballs(i):
+
+def add_water_ball(i):
     circle_radius = 0.3
     v = 2
     ang = i * math.pi * 2 / n_balls
@@ -80,12 +76,30 @@ def add_snowballs(i):
                       radius=0.03,
                       material=mpm.material_water,
                       velocity=(-v * math.cos(ang), 1.4, -v * math.sin(ang)),
-                      color=0x88AAFF)
+                      color=0x88DDFF)
+    
+
+def add_snow_brick(i):
+    f = i
+    mpm.add_cube(lower_corner=(0.3 + f * 0.05, 0.5 + f * 0.1, 0.3), cube_size=(0.1, 0.03, 0.05),
+                      material=mpm.material_snow,
+                      velocity=(0, -1, 0),
+                      color=0xFFFFFF)
 
 
 for frame in range(1500):
     if water_ball_start <= frame < water_ball_start + n_balls:
-        add_snowballs(frame - water_ball_start)
+        add_water_ball(frame - water_ball_start)
+
+    if snow_brick_start <= frame < snow_brick_start + n_balls:
+        add_snow_brick(frame - snow_brick_start)
+        
+    if frame == 50:
+        triangles = load_mesh('mlsmpm.ply', scale=0.05, offset=(0.5, 0.5, 0.8))
+        mpm.add_mesh(triangles=triangles,
+                     material=MPMSolver.material_sand,
+                     color=0xFF11CC,
+                     velocity=(0, -1, 0))
 
     print(f'frame {frame}')
     print(f'num particles={mpm.n_particles[None]}')
