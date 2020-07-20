@@ -27,6 +27,7 @@ num_particles = ti.var(ti.i32, shape=())
 
 fov = 0.23
 dist_limit = 100
+shutter_begin = -1
 
 exposure = 1.5
 camera_pos = ti.Vector([0.5, 0.32, 2.7])
@@ -350,7 +351,7 @@ def render():
                        2 * fov * (v + ti.random(ti.f32)) / res[1] - fov - 1e-5,
                        -1.0])
         d = d.normalized()
-        t = (ti.random() - 0.5) * shutter_time
+        t = (ti.random() + shutter_begin) * shutter_time
 
         contrib = ti.Vector([0.0, 0.0, 0.0])
         throughput = ti.Vector([1.0, 1.0, 1.0])
@@ -414,8 +415,8 @@ support = 2
 @ti.kernel
 def initialize_particle_grid():
     for p in range(num_particles[None]):
-        x = particle_x[p]
         v = particle_v[p]
+        x = particle_x[p] + (shutter_begin + 0.5) * shutter_time * v
         ipos = ti.floor(x * inv_dx).cast(ti.i32)
         for i in range(-support, support + 1):
             for j in range(-support, support + 1):
@@ -426,8 +427,8 @@ def initialize_particle_grid():
                         box_min = box_ipos * dx
                         box_max = (box_ipos + ti.Vector([1, 1, 1])) * dx
                         if sphere_aabb_intersect_motion(
-                                box_min, box_max, x - 0.5 * shutter_time * v,
-                                x + 0.5 * shutter_time * v, sphere_radius):
+                                box_min, box_max, x + shutter_begin * shutter_time * v,
+                                x + (shutter_begin + 1) * shutter_time * v, sphere_radius):
                             ti.append(pid.parent(), box_ipos - ti.Vector(particle_grid_offset), p)
                             voxel_has_particle[box_ipos] = 1
 
@@ -460,7 +461,7 @@ def initialize_particle_x(x: ti.ext_arr(), v: ti.ext_arr(),
                 ti.i32) + ti.Vector([k // 9, k // 3 % 3, k % 3])
             voxel_grid_density[base_coord // voxel_grid_visualization_block_size] = 1
 
-def initialize(f):
+def initialize(f, delta):
     particle_bucket.deactivate_all()
     voxel_grid_density.snode().parent(n=2).deactivate_all()
     voxel_has_particle.snode().parent(n=2).deactivate_all()
@@ -482,6 +483,8 @@ def initialize(f):
         num_part = len(np_x)
         np_v = data['v']
         np_c = data['c']
+        
+    np_x += (delta - 1) * np_v * 2e-3
 
     assert num_part <= max_num_particles
 
@@ -502,13 +505,13 @@ def initialize(f):
 
 gui = ti.GUI('Particle Renderer', res)
 
-def render_frame(f, spp):
+def render_frame(f, spp, delta):
     t = time.time()
     last_t = 0
     for i in range(1, 1 + spp):
         render()
         
-        interval = 10
+        interval = 20
         if i % interval == 0:
             img = np.zeros((res[0], res[1], 3), dtype=np.float32)
             copy(img, i + 1)
@@ -517,14 +520,17 @@ def render_frame(f, spp):
                     (time.time() - last_t) * 1000 / interval))
             last_t = time.time()
             gui.set_image(img)
-            gui.show(f'rendered/{f:05d}.png')
+    gui.show(f'rendered/{f:05d}{delta}.png')
+    
     print(f'Frame rendered. {spp} take {time.time() - t} s.')
 
 def main():
-    for f in range(0, 119, 1):
+    for f in range(0, 500, 1):
         print(f'frame {f}')
-        initialize(f)
-        render_frame(f, 50)
+        initialize(f=f, delta=0)
+        render_frame(f, 50, delta=0)
+        initialize(f=f, delta=1)
+        render_frame(f, 50, delta=1)
         
 if __name__ == '__main__':
     main()

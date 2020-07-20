@@ -10,7 +10,7 @@ from engine.mpm_solver import MPMSolver
 write_to_disk = False
 
 # Try to run on GPU
-ti.init(arch=ti.cuda, kernel_profiler=True, debug=True)
+ti.init(arch=ti.cuda, kernel_profiler=True, debug=False)
 
 gui = ti.GUI("MLS-MPM", res=512, background_color=0x112F41)
 
