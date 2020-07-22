@@ -16,7 +16,9 @@ particles = np.fromfile('benchmark_particles.bin', dtype=np.float32)
 particles = particles.reshape(len(particles) // 3, 3)
 print(len(particles))
 
-mpm.add_particles(particles=particles, material=MPMSolver.material_elastic, color=0xFFFF00)
+mpm.add_particles(particles=particles,
+                  material=MPMSolver.material_elastic,
+                  color=0xFFFF00)
 
 mpm.set_gravity((0, -20, 0))
 

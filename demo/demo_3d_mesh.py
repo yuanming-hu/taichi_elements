@@ -15,7 +15,9 @@ mpm = MPMSolver(res=(64, 64, 64), size=1)
 triangles = np.fromfile('triangles.npy', dtype=np.float32)
 triangles = np.reshape(triangles, (len(triangles) // 9, 9)) * 0.306 + 0.501
 
-mpm.add_mesh(triangles=triangles, material=MPMSolver.material_elastic, color=0xFFFF00)
+mpm.add_mesh(triangles=triangles,
+             material=MPMSolver.material_elastic,
+             color=0xFFFF00)
 
 mpm.set_gravity((0, -20, 0))
 

@@ -53,19 +53,24 @@ mpm.set_gravity((0, -25, 0))
 
 def visualize(particles):
     np_x = particles['position'] / 1.0
-    
+
     # simple camera transform
     screen_x = ((np_x[:, 0] + np_x[:, 2]) / 2**0.5) - 0.2
     screen_y = (np_x[:, 1])
-    
+
     screen_pos = np.stack([screen_x, screen_y], axis=-1)
-    
+
     gui.circles(screen_pos, radius=0.8, color=particles['color'])
     gui.show(f'{frame:06d}.png' if write_to_disk else None)
-    
+
+
 counter = 0
 
+start_t = time.time()
+
 for frame in range(15000):
+    print(f'frame {frame}')
+    t = time.time()
     if frame % 15 == 0:
         if counter < 50:
             mpm.add_mesh(triangles=triangles,
@@ -74,17 +79,15 @@ for frame in range(15000):
                          velocity=(0, -2, 0))
 
         counter += 1
-    
-    print(f'frame {frame}')
+
+        mpm.flush()
+
     mpm.step(2e-3, print_stat=True)
     if frame % 15 == 0:
         particles = mpm.particle_info()
         visualize(particles)
 
     if write_to_disk:
-        particles = mpm.particle_info()
-        output_fn = f'{output_dir}/{frame:05d}.npz'
-        np.savez_compressed(output_fn,
-                            x=particles['position'],
-                            v=particles['velocity'],
-                            c=particles['color'])
+        mpm.write_particles(f'{output_dir}/{frame:05d}.npz')
+    print(f'Frame total time {time.time() - t:.3f}')
+    print(f'Total running time {time.time() - start_t:.3f}')

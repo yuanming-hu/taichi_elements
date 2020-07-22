@@ -35,11 +35,13 @@ for frame in range(500):
             cube_size=[0.2, 0.1],
             velocity=[-3, -1],
             material=MPMSolver.material_snow)
-    colors = np.array([0x068587, 0xED553B, 0xEEEEF0, 0xFFFF00], dtype=np.uint32)
+    colors = np.array([0x068587, 0xED553B, 0xEEEEF0, 0xFFFF00],
+                      dtype=np.uint32)
     particles = mpm.particle_info()
-    gui.circles(particles['position'], radius=1.5, color=colors[particles['material']])
+    gui.circles(particles['position'],
+                radius=1.5,
+                color=colors[particles['material']])
     gui.show(f'{frame:06d}.png' if write_to_disk else None)
     if frame % 10 == 0:
         mpm.n_particles[None] = 0
         mpm.x.loop_range().parent().snode().deactivate_all()
-

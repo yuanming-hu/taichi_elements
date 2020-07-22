@@ -3,6 +3,7 @@ import numpy as np
 import time
 import numbers
 import math
+import multiprocessing as mp
 
 USE_IN_BLENDER = False
 
@@ -36,7 +37,7 @@ class MPMSolver:
         'SLIP': surface_slip,
         'SEPARATE': surface_separate
     }
-    
+
     grid_size = 4096
 
     def __init__(
@@ -100,7 +101,8 @@ class MPMSolver:
         else:
             self.leaf_block_size = 8
 
-        block = self.grid.pointer(indices, grid_block_size // self.leaf_block_size)
+        block = self.grid.pointer(indices,
+                                  grid_block_size // self.leaf_block_size)
 
         def block_component(c):
             block.dense(indices, self.leaf_block_size).place(c, offset=offset)
@@ -151,6 +153,8 @@ class MPMSolver:
         self.grid_postprocess = []
 
         self.add_bounding_box(self.unbounded)
+
+        self.writers = []
 
     def stencil_range(self):
         return ti.ndrange(*((3, ) * self.dim))
@@ -283,16 +287,18 @@ class MPMSolver:
         for I in ti.grouped(self.grid_m):
             for d in ti.static(range(self.dim)):
                 if ti.static(unbounded):
-                    if I[d] < -self.grid_size // 2 + self.padding  and self.grid_v[I][d] < 0:
+                    if I[d] < -self.grid_size // 2 + self.padding and self.grid_v[
+                            I][d] < 0:
                         self.grid_v[I][d] = 0  # Boundary conditions
-                    if I[d] >= self.grid_size // 2 - self.padding and self.grid_v[I][d] > 0:
+                    if I[d] >= self.grid_size // 2 - self.padding and self.grid_v[
+                            I][d] > 0:
                         self.grid_v[I][d] = 0
                 else:
                     if I[d] < self.padding and self.grid_v[I][d] < 0:
                         self.grid_v[I][d] = 0  # Boundary conditions
-                    if I[d] >= self.res[d] - self.padding and self.grid_v[I][d] > 0:
+                    if I[d] >= self.res[d] - self.padding and self.grid_v[I][
+                            d] > 0:
                         self.grid_v[I][d] = 0
-                    
 
     def add_sphere_collider(self, center, radius, surface=surface_sticky):
         center = list(center)
@@ -320,12 +326,16 @@ class MPMSolver:
 
         self.grid_postprocess.append(collide)
 
-    def add_surface_collider(self, point, normal, surface=surface_sticky, friction=0.0):
+    def add_surface_collider(self,
+                             point,
+                             normal,
+                             surface=surface_sticky,
+                             friction=0.0):
         point = list(point)
         # normalize normal
         normal_scale = 1.0 / math.sqrt(sum(x**2 for x in normal))
         normal = list(normal_scale * x for x in normal)
-        
+
         if surface == self.surface_sticky and friction == 0:
             raise ValueError('friction must be 0 on sticky surfaces.')
 
@@ -347,17 +357,20 @@ class MPMSolver:
                         else:
                             # Project out only inward normal component
                             v = v - n * min(normal_component, 0)
-                            
+
                         if normal_component < 0 and v.norm() > 1e-30:
                             # apply friction here
-                            v = v.normalized() * max(0, v.norm() + normal_component * friction)
+                            v = v.normalized() * max(
+                                0,
+                                v.norm() + normal_component * friction)
 
                         self.grid_v[I] = v
 
         self.grid_postprocess.append(collide)
 
     def add_bounding_box(self, unbounded):
-        self.grid_postprocess.append(lambda dt: self.grid_bounding_box(dt, unbounded))
+        self.grid_postprocess.append(
+            lambda dt: self.grid_bounding_box(dt, unbounded))
 
     @ti.kernel
     def g2p(self, dt: ti.f32):
@@ -407,9 +420,11 @@ class MPMSolver:
 
         if print_stat:
             ti.kernel_profiler_print()
-            print(f'num particles={self.n_particles[None]})')
-            print(f'frame time {time.time() - begin_t:.3f} s')
-            print(f'substep time {1000 * (time.time() - begin_t) / (self.total_substeps - begin_substep):.3f} ms')
+            print(f'num particles={self.n_particles[None]}')
+            print(f'  frame time {time.time() - begin_t:.3f} s')
+            print(
+                f'  substep time {1000 * (time.time() - begin_t) / (self.total_substeps - begin_substep):.3f} ms'
+            )
 
     @ti.func
     def seed_particle(self, i, x, material, color, velocity):
@@ -620,3 +635,27 @@ class MPMSolver:
     def clear_particles(self):
         self.n_particles[None] = 0
         ti.deactivate(self.x.loop_range().parent().snode(), [])
+
+    def dump(self, fn, particles):
+        t = time.time()
+        output_fn = fn
+
+        np.savez_compressed(output_fn,
+                            x=particles['position'],
+                            v=particles['velocity'],
+                            c=particles['color'])
+
+        print(f'Writing to disk: {time.time() - t:.3f} s')
+
+    def write_particles(self, fn):
+        particles = self.particle_info()
+
+        p = mp.Process(target=self.dump, args=(fn, particles))
+        p.start()
+
+        self.writers.append(p)
+
+    def flush(self):
+        for p in self.writers:
+            p.join()
+        self.writers = []

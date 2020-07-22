@@ -10,7 +10,10 @@ from engine.mpm_solver import MPMSolver
 write_to_disk = False
 
 # Try to run on GPU
-ti.init(arch=ti.cuda, kernel_profiler=True, use_unified_memory=False, device_memory_GB=8)
+ti.init(arch=ti.cuda,
+        kernel_profiler=True,
+        use_unified_memory=False,
+        device_memory_GB=8)
 
 gui = ti.GUI("MLS-MPM", res=512, background_color=0x112F41)
 
@@ -44,7 +47,10 @@ R = 512
 
 mpm = MPMSolver(res=(R, R, R), size=1, unbounded=True)
 
-mpm.add_surface_collider(point=(0, 0, 0), normal=(0, 1, 0), surface=mpm.surface_slip, friction=1.5)
+mpm.add_surface_collider(point=(0, 0, 0),
+                         normal=(0, 1, 0),
+                         surface=mpm.surface_slip,
+                         friction=1.5)
 
 triangles = load_mesh('taichi.ply', scale=0.02, offset=(0.5, 0.6, 0.5))
 mpm.add_mesh(triangles=triangles,
@@ -57,7 +63,6 @@ mpm.add_mesh(triangles=triangles,
              material=MPMSolver.material_elastic,
              color=0x76B90B,
              velocity=(0, -1, 0))
-
 
 mpm.set_gravity((0, -25, 0))
 
@@ -77,27 +82,29 @@ def add_water_ball(i):
                       material=mpm.material_water,
                       velocity=(-v * math.cos(ang), 1.4, -v * math.sin(ang)),
                       color=0x88DDFF)
-    
+
 
 def add_snow_brick(i):
     f = i
-    mpm.add_cube(lower_corner=(0.3 + f * 0.05, 0.5 + f * 0.1, 0.3), cube_size=(0.1, 0.03, 0.05),
-                      material=mpm.material_snow,
-                      velocity=(0, -1, 0),
-                      color=0xFFFFFF)
+    mpm.add_cube(lower_corner=(0.3 + f * 0.05, 0.5 + f * 0.1, 0.3),
+                 cube_size=(0.1, 0.03, 0.05),
+                 material=mpm.material_snow,
+                 velocity=(0, -1, 0),
+                 color=0xFFFFFF)
 
 
 def visualize(particles):
     np_x = particles['position'] / 1.0
-    
+
     # simple camera transform
     screen_x = ((np_x[:, 0] + np_x[:, 2]) / 2**0.5) - 0.2
     screen_y = (np_x[:, 1])
-    
+
     screen_pos = np.stack([screen_x, screen_y], axis=-1)
-    
+
     gui.circles(screen_pos, radius=0.8, color=particles['color'])
     gui.show(f'{frame:06d}.png' if write_to_disk else None)
+
 
 for frame in range(1500):
     if water_ball_start <= frame < water_ball_start + n_balls:
@@ -105,7 +112,7 @@ for frame in range(1500):
 
     if snow_brick_start <= frame < snow_brick_start + n_balls:
         add_snow_brick(frame - snow_brick_start)
-        
+
     if frame == 50:
         triangles = load_mesh('mlsmpm.ply', scale=0.05, offset=(0.5, 0.5, 0.8))
         mpm.add_mesh(triangles=triangles,

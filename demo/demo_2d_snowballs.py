@@ -29,5 +29,5 @@ for frame in range(500):
     particles = mpm.particle_info()
     gui.circles(particles['position'], radius=1.5, color=particles['color'])
     gui.show(f'{frame:06d}.png' if write_to_disk else None)
-    
+
     ti.kernel_profiler_print()

@@ -11,7 +11,9 @@ ti.init(arch=ti.cuda, kernel_profiler=True)  # Try to run on GPU
 gui = ti.GUI("Taichi MLS-MPM", res=512, background_color=0x112F41)
 
 mpm = MPMSolver(res=(128, 128), unbounded=True)
-mpm.add_surface_collider(point=(0, 0.0), normal=(0.3, 1), surface=mpm.surface_slip)
+mpm.add_surface_collider(point=(0, 0.0),
+                         normal=(0.3, 1),
+                         surface=mpm.surface_slip)
 
 for i in range(3):
     mpm.add_cube(lower_corner=[0.2 + i * 0.1, 0.3 + i * 0.1],
@@ -36,7 +38,8 @@ for frame in range(500):
             cube_size=[0.2, 0.1],
             velocity=[-3, -1],
             material=MPMSolver.material_snow)
-    colors = np.array([0x068587, 0xED553B, 0xEEEEF0, 0xFFFF00], dtype=np.uint32)
+    colors = np.array([0x068587, 0xED553B, 0xEEEEF0, 0xFFFF00],
+                      dtype=np.uint32)
     particles = mpm.particle_info()
     pos = particles['position'] * 0.4 + 0.3
     gui.circles(pos, radius=0.75, color=colors[particles['material']])
