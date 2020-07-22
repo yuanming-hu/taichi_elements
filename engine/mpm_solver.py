@@ -44,7 +44,7 @@ class MPMSolver:
             self,
             res,
             size=1,
-            max_num_particles=2**25,
+            max_num_particles=2**27,
             # Max 128 MB particles
             padding=3,
             unbounded=False,
@@ -556,7 +556,7 @@ class MPMSolver:
                     x = ti.Vector(
                         [ti.random() + i,
                          ti.random() + j,
-                         ti.random() + k]) * self.dx
+                         ti.random() + k]) * self.dx + self.source_bound[0]
                     p = ti.atomic_add(self.n_particles[None], 1)
                     self.seed_particle(p, x, material, color,
                                        self.source_velocity[None])
@@ -566,12 +566,19 @@ class MPMSolver:
                  material,
                  color=0xFFFFFF,
                  sample_density=None,
-                 velocity=None):
+                 velocity=None,
+                 translation=None):
         assert self.dim == 3
         if sample_density is None:
             sample_density = 2**self.dim
 
         self.set_source_velocity(velocity=velocity)
+        
+        for i in range(self.dim):
+            if translation:
+                self.source_bound[0][i] = translation[i]
+            else:
+                self.source_bound[0][i] = 0
 
         self.voxelizer.voxelize(triangles)
         t = time.time()
