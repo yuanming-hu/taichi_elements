@@ -186,7 +186,7 @@ class MPMSolver:
     def build_pid(self):
         ti.block_dim(64)
         for p in self.x:
-            base = int(ti.floor(self.x[p] * self.inv_dx - 1.5))
+            base = int(ti.floor(self.x[p] * self.inv_dx - 0.5))
             ti.append(self.pid.parent(), base - ti.Vector(list(self.offset)),
                       p)
 
@@ -200,7 +200,7 @@ class MPMSolver:
             p = self.pid[I]
             base = ti.floor(self.x[p] * self.inv_dx - 0.5).cast(int)
             for D in ti.static(range(self.dim)):
-                base[D] = ti.assume_in_range(base[D], I[D], 1, 2)
+                base[D] = ti.assume_in_range(base[D], I[D], 0, 1)
 
             fx = self.x[p] * self.inv_dx - base.cast(float)
             # Quadratic kernels  [http://mpm.graphics   Eqn. 123, with x=fx, fx-1,fx-2]
@@ -360,7 +360,7 @@ class MPMSolver:
             p = self.pid[I]
             base = ti.floor(self.x[p] * self.inv_dx - 0.5).cast(int)
             for D in ti.static(range(self.dim)):
-                base[D] = ti.assume_in_range(base[D], I[D], 1, 2)
+                base[D] = ti.assume_in_range(base[D], I[D], 0, 1)
             fx = self.x[p] * self.inv_dx - base.cast(float)
             w = [
                 0.5 * (1.5 - fx)**2, 0.75 - (fx - 1.0)**2, 0.5 * (fx - 0.5)**2

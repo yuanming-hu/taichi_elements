@@ -44,7 +44,7 @@ R = 256
 
 mpm = MPMSolver(res=(R, R, R), size=1, unbounded=True)
 
-# mpm.add_surface_collider(point=(0, 0, 0), normal=(0, 1, 0), surface=mpm.surface_slip)
+mpm.add_surface_collider(point=(0, 0, 0), normal=(0, 1, 0), surface=mpm.surface_slip)
 
 triangles = load_mesh('taichi.ply', scale=0.05, offset=(0.5, 0.6, 0.5))
 mpm.add_mesh(triangles=triangles,
