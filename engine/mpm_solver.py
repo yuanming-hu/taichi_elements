@@ -37,13 +37,14 @@ class MPMSolver:
         'SEPARATE': surface_separate
     }
 
-    def __init__(self,
-                 res,
-                 size=1,
-                 max_num_particles=2**25,
-                 # Max 128 MB particles
-                 padding=3,
-                 unbounded=False):
+    def __init__(
+            self,
+            res,
+            size=1,
+            max_num_particles=2**25,
+            # Max 128 MB particles
+            padding=3,
+            unbounded=False):
         self.dim = len(res)
         assert self.dim in (
             2, 3), "MPM solver supports only 2D and 3D simulations."
@@ -74,12 +75,12 @@ class MPMSolver:
         self.color = ti.var(dt=ti.i32)
         # plastic deformation
         self.Jp = ti.var(dt=ti.f32)
-        
+
         if self.dim == 2:
             indices = ti.ij
         else:
             indices = ti.ijk
-            
+
         offset = tuple(-2048 for _ in range(self.dim))
         self.offset = offset
 
@@ -87,25 +88,28 @@ class MPMSolver:
         self.grid_v = ti.Vector(self.dim, dt=ti.f32)
         # grid node mass
         self.grid_m = ti.var(dt=ti.f32)
-        
+
         self.grid = ti.root.pointer(indices, 32)
-        
+
         if self.dim == 2:
             self.leaf_block_size = 16
         else:
             self.leaf_block_size = 8
-            
+
         block = self.grid.pointer(indices, 128 // self.leaf_block_size)
-        
+
         def block_component(c):
             block.dense(indices, self.leaf_block_size).place(c, offset=offset)
-            
+
         block_component(self.grid_m)
         for v in self.grid_v.entries:
             block_component(v)
-            
-        block.dynamic(ti.indices(self.dim), 1024 * 1024, chunk_size=self.leaf_block_size ** self.dim * 32).place(self.pid, offset=offset + (0,))
-        
+
+        block.dynamic(ti.indices(self.dim),
+                      1024 * 1024,
+                      chunk_size=self.leaf_block_size**self.dim * 32).place(
+                          self.pid, offset=offset + (0, ))
+
         self.padding = padding
 
         # Young's modulus and Poisson's ratio
@@ -113,7 +117,7 @@ class MPMSolver:
         # Lame parameters
         self.mu_0, self.lambda_0 = self.E / (
             2 * (1 + self.nu)), self.E * self.nu / ((1 + self.nu) *
-                                                     (1 - 2 * self.nu))
+                                                    (1 - 2 * self.nu))
 
         # Sand parameters
         friction_angle = math.radians(45)
@@ -121,8 +125,8 @@ class MPMSolver:
         self.alpha = math.sqrt(2 / 3) * 2 * sin_phi / (3 - sin_phi)
 
         self.particle = ti.root.dynamic(ti.i, max_num_particles, 2**20)
-        self.particle.place(self.x, self.v, self.C, self.F,
-                                     self.material, self.color, self.Jp)
+        self.particle.place(self.x, self.v, self.C, self.F, self.material,
+                            self.color, self.Jp)
 
         self.total_substeps = 0
         self.unbounded = unbounded
@@ -141,7 +145,7 @@ class MPMSolver:
             self.set_gravity((0, -9.8, 0))
 
         self.grid_postprocess = []
-        
+
         if not self.unbounded:
             self.add_bounding_box()
 
@@ -175,13 +179,14 @@ class MPMSolver:
                                          epsilon_hat_norm * epsilon_hat[i])
 
         return sigma_out
-    
+
     @ti.kernel
     def build_pid(self):
         ti.block_dim(64)
         for p in self.x:
             base = ti.floor(self.x[p] * self.inv_dx - 1.5).cast(int)
-            ti.append(self.pid.parent(), base - ti.Vector(list(self.offset)), p)
+            ti.append(self.pid.parent(), base - ti.Vector(list(self.offset)),
+                      p)
 
     @ti.kernel
     def p2g(self, dt: ti.f32):
@@ -194,7 +199,7 @@ class MPMSolver:
             base = ti.floor(self.x[p] * self.inv_dx - 0.5).cast(int)
             for D in ti.static(range(self.dim)):
                 base[D] = ti.assume_in_range(base[D], I[D], 1, 2)
-        
+
             fx = self.x[p] * self.inv_dx - base.cast(float)
             # Quadratic kernels  [http://mpm.graphics   Eqn. 123, with x=fx, fx-1,fx-2]
             w = [0.5 * (1.5 - fx)**2, 0.75 - (fx - 1)**2, 0.5 * (fx - 0.5)**2]
@@ -333,7 +338,7 @@ class MPMSolver:
                         self.grid_v[I] = v
 
         self.grid_postprocess.append(collide)
-        
+
     def add_bounding_box(self):
         self.grid_postprocess.append(lambda dt: self.grid_bounding_box(dt))
 
@@ -364,17 +369,17 @@ class MPMSolver:
                 new_C += 4 * self.inv_dx * weight * g_v.outer_product(dpos)
             self.v[p], self.C[p] = new_v, new_C
             self.x[p] += dt * self.v[p]  # advection
-            
+
     def step(self, frame_dt, print_stat=False):
         begin_t = time.time()
         begin_substep = self.total_substeps
 
         substeps = int(frame_dt / self.default_dt) + 1
-        
+
         for i in range(substeps):
             self.total_substeps += 1
             dt = frame_dt / substeps
-            
+
             self.grid.deactivate_all()
             self.build_pid()
             self.p2g(dt)
@@ -382,12 +387,13 @@ class MPMSolver:
             for p in self.grid_postprocess:
                 p(dt)
             self.g2p(dt)
-            
+
         if print_stat:
             ti.kernel_profiler_print()
-            print(f'num particles={self.n_particles[None]}, frame time {time.time() - begin_t:.3f} s,'
-                  f'substep time {1000 * (time.time() - begin_t) / (self.total_substeps - begin_substep):.3f} ms')
-            
+            print(
+                f'num particles={self.n_particles[None]}, frame time {time.time() - begin_t:.3f} s,'
+                f'substep time {1000 * (time.time() - begin_t) / (self.total_substeps - begin_substep):.3f} ms'
+            )
 
     @ti.func
     def seed_particle(self, i, x, material, color, velocity):
@@ -538,25 +544,27 @@ class MPMSolver:
 
         self.voxelizer.voxelize(triangles)
         self.seed_from_voxels(material, color, sample_density)
-        
+
     @ti.kernel
-    def seed_from_external_array(self, num_particles: ti.i32, pos: ti.ext_arr(), new_material: ti.i32,
-                       color: ti.i32):
-    
+    def seed_from_external_array(self, num_particles: ti.i32,
+                                 pos: ti.ext_arr(), new_material: ti.i32,
+                                 color: ti.i32):
+
         for i in range(num_particles):
             x = ti.Vector([pos[i, 0], pos[i, 1], pos[i, 2]])
-            self.seed_particle(self.n_particles[None] + i, x, new_material, color,
-                               self.source_velocity[None])
-        
+            self.seed_particle(self.n_particles[None] + i, x, new_material,
+                               color, self.source_velocity[None])
+
         self.n_particles[None] += num_particles
-        
+
     def add_particles(self,
-                 particles,
-                 material,
-                 color=0xFFFFFF,
-                 velocity=None):
+                      particles,
+                      material,
+                      color=0xFFFFFF,
+                      velocity=None):
         self.set_source_velocity(velocity=velocity)
-        self.seed_from_external_array(len(particles), particles, material, color)
+        self.seed_from_external_array(len(particles), particles, material,
+                                      color)
 
     @ti.kernel
     def copy_dynamic_nd(self, np_x: ti.ext_arr(), input_x: ti.template()):
@@ -584,10 +592,8 @@ class MPMSolver:
             'material': np_material,
             'color': np_color
         }
-    
-    
+
     @ti.kernel
     def clear_particles(self):
         self.n_particles[None] = 0
         ti.deactivate(self.x.loop_range().parent().snode(), [])
-
