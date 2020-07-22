@@ -67,7 +67,7 @@ counter = 0
 
 for frame in range(15000):
     if frame % 15 == 0:
-        if counter < 100:
+        if counter < 50:
             mpm.add_mesh(triangles=triangles,
                          material=MPMSolver.material_elastic,
                          color=0xFFFFFF,
@@ -77,7 +77,7 @@ for frame in range(15000):
     
     print(f'frame {frame}')
     mpm.step(2e-3, print_stat=True)
-    if frame % 5 == 0:
+    if frame % 15 == 0:
         particles = mpm.particle_info()
         visualize(particles)
 

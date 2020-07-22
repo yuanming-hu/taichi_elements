@@ -3,6 +3,7 @@ import numpy as np
 import math
 import time
 import os
+import sys
 from renderer_utils import out_dir, ray_aabb_intersection, inf, eps, \
   intersect_sphere, sphere_aabb_intersect_motion, inside_taichi
 
@@ -478,7 +479,7 @@ def initialize(f, delta):
         np_c = np.zeros(num_part).astype(np.int32)
         np_c[:] = int(0.85 * 256) * 256 ** 2 + int(0.9 * 256) * 256 + int(0.98 * 256)
     else:
-        data = np.load(f'output_particles/{f:05d}.npz')
+        data = np.load(f'{sys.argv[1]}/{f:05d}.npz')
         np_x = data['x']
         num_part = len(np_x)
         np_v = data['v']
@@ -525,7 +526,7 @@ def render_frame(f, spp, delta):
     print(f'Frame rendered. {spp} take {time.time() - t} s.')
 
 def main():
-    for f in range(0, 500, 1):
+    for f in range(int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4])):
         print(f'frame {f}')
         initialize(f=f, delta=0)
         render_frame(f, 50, delta=0)

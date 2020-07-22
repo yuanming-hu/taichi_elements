@@ -347,6 +347,10 @@ class MPMSolver:
                         else:
                             # Project out only inward normal component
                             v = v - n * min(normal_component, 0)
+                            
+                        if normal_component < 0 and v.norm() > 1e-30:
+                            # apply friction here
+                            v = v.normalized() * max(0, v.norm() + normal_component * friction)
 
                         self.grid_v[I] = v
 
