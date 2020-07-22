@@ -46,7 +46,8 @@ class MPMSolver:
             max_num_particles=2**25,
             # Max 128 MB particles
             padding=3,
-            unbounded=False):
+            unbounded=False,
+            dt_scale=1):
         self.dim = len(res)
         assert self.dim in (
             2, 3), "MPM solver supports only 2D and 3D simulations."
@@ -55,7 +56,7 @@ class MPMSolver:
         self.n_particles = ti.var(ti.i32, shape=())
         self.dx = size / res[0]
         self.inv_dx = 1.0 / self.dx
-        self.default_dt = 2e-2 * self.dx / size
+        self.default_dt = 2e-2 * self.dx / size * dt_scale
         self.p_vol = self.dx**self.dim
         self.p_rho = 1000
         self.p_mass = self.p_vol * self.p_rho
@@ -319,11 +320,14 @@ class MPMSolver:
 
         self.grid_postprocess.append(collide)
 
-    def add_surface_collider(self, point, normal, surface=surface_sticky):
+    def add_surface_collider(self, point, normal, surface=surface_sticky, friction=0.0):
         point = list(point)
         # normalize normal
         normal_scale = 1.0 / math.sqrt(sum(x**2 for x in normal))
         normal = list(normal_scale * x for x in normal)
+        
+        if surface == self.surface_sticky and friction == 0:
+            raise ValueError('friction must be 0 on sticky surfaces.')
 
         @ti.kernel
         def collide(dt: ti.f32):
@@ -399,10 +403,9 @@ class MPMSolver:
 
         if print_stat:
             ti.kernel_profiler_print()
-            print(
-                f'num particles={self.n_particles[None]}, frame time {time.time() - begin_t:.3f} s,'
-                f'substep time {1000 * (time.time() - begin_t) / (self.total_substeps - begin_substep):.3f} ms'
-            )
+            print(f'num particles={self.n_particles[None]})')
+            print(f'frame time {time.time() - begin_t:.3f} s')
+            print(f'substep time {1000 * (time.time() - begin_t) / (self.total_substeps - begin_substep):.3f} ms')
 
     @ti.func
     def seed_particle(self, i, x, material, color, velocity):
@@ -552,7 +555,10 @@ class MPMSolver:
         self.set_source_velocity(velocity=velocity)
 
         self.voxelizer.voxelize(triangles)
+        t = time.time()
         self.seed_from_voxels(material, color, sample_density)
+        ti.sync()
+        print('Voxelization time:', (time.time() - t) * 1000, 'ms')
 
     @ti.kernel
     def seed_from_external_array(self, num_particles: ti.i32,

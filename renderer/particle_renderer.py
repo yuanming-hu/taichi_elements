@@ -130,7 +130,7 @@ def sdf(o):
         o -= ti.Vector([0.5, 0.002, 0.5])
         dist = (o.abs() - ti.Vector([0.5, 0.02, 0.5])).max()
     else:
-        dist = o[1] - 0.003
+        dist = o[1] - 0.001
 
     return dist
 
@@ -529,8 +529,6 @@ def main():
         print(f'frame {f}')
         initialize(f=f, delta=0)
         render_frame(f, 50, delta=0)
-        initialize(f=f, delta=1)
-        render_frame(f, 50, delta=1)
         
 if __name__ == '__main__':
     main()
