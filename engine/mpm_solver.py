@@ -5,7 +5,7 @@ import math
 
 USE_IN_BLENDER = False
 
-ti.require_version(0, 6, 10)
+ti.require_version(0, 6, 19)
 
 
 @ti.data_oriented
@@ -177,7 +177,7 @@ class MPMSolver:
     
     @ti.kernel
     def build_pid(self):
-        ti.block_dim(256)
+        ti.block_dim(64)
         for p in self.x:
             base = ti.floor(self.x[p] * self.inv_dx - 1.5).cast(int)
             ti.append(self.pid.parent(), base - ti.Vector(list(self.offset)), p)

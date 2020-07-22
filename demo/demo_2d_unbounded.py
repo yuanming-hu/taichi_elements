@@ -6,7 +6,7 @@ from engine.mpm_solver import MPMSolver
 
 write_to_disk = False
 
-ti.init(arch=ti.gpu, kernel_profiler=True)  # Try to run on GPU
+ti.init(arch=ti.cuda, kernel_profiler=True)  # Try to run on GPU
 
 gui = ti.GUI("Taichi MLS-MPM", res=512, background_color=0x112F41)
 
@@ -42,3 +42,4 @@ for frame in range(500):
     gui.circles(pos, radius=0.75, color=colors[particles['material']])
     gui.show(f'{frame:06d}.png' if write_to_disk else None)
     ti.kernel_profiler_print()
+    print(f'num particles = {mpm.n_particles[None]}')

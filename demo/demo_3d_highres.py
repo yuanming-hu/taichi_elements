@@ -10,7 +10,7 @@ from engine.mpm_solver import MPMSolver
 write_to_disk = False
 
 # Try to run on GPU
-ti.init(arch=ti.cuda, kernel_profiler=True, debug=False)
+ti.init(arch=ti.cuda, kernel_profiler=True)
 
 gui = ti.GUI("MLS-MPM", res=512, background_color=0x112F41)
 
@@ -42,7 +42,7 @@ def load_mesh(fn, scale, offset):
 
 R = 512
 
-mpm = MPMSolver(res=(R, R, R), size=1, unbounded=False)
+mpm = MPMSolver(res=(R, R, R), size=1, unbounded=True)
 
 # mpm.add_surface_collider(point=(0, 0, 0), normal=(0, 1, 0), surface=mpm.surface_slip)
 
