@@ -42,7 +42,7 @@ def load_mesh(fn, scale, offset):
 
 R = 256
 
-mpm = MPMSolver(res=(R, R, R), size=1, unbounded=False)
+mpm = MPMSolver(res=(R, R, R), size=1, unbounded=True)
 
 # mpm.add_surface_collider(point=(0, 0, 0), normal=(0, 1, 0), surface=mpm.surface_slip)
 
@@ -96,9 +96,8 @@ def visualize(particles):
     
     screen_pos = np.stack([screen_x, screen_y], axis=-1)
     
-    gui.circles(screen_pos, radius=1.1, color=particles['color'])
-    if frame % 5 == 0:
-        gui.show(f'{frame:06d}.png' if write_to_disk else None)
+    gui.circles(screen_pos, radius=0.8, color=particles['color'])
+    gui.show(f'{frame:06d}.png' if write_to_disk else None)
 
 for frame in range(1500):
     if water_ball_start <= frame < water_ball_start + n_balls:
@@ -116,7 +115,7 @@ for frame in range(1500):
 
     print(f'frame {frame}')
     mpm.step(4e-3, print_stat=True)
-    if frame % 5 == 0:
+    if frame % 1 == 0:
         particles = mpm.particle_info()
         visualize(particles)
 
