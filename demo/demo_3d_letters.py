@@ -11,7 +11,7 @@ from engine.mpm_solver import MPMSolver
 write_to_disk = True
 
 # Try to run on GPU
-ti.init(arch=ti.cuda, kernel_profiler=True, use_unified_memory=False, device_memory_GB=8)
+ti.init(arch=ti.cuda, kernel_profiler=True, use_unified_memory=False, device_memory_GB=15)
 
 gui = ti.GUI("MLS-MPM", res=512, background_color=0x112F41)
 
@@ -44,7 +44,7 @@ R = 512
 
 mpm = MPMSolver(res=(R, R, R), size=1, unbounded=True, dt_scale=1)
 
-mpm.add_surface_collider(point=(0, 0, 0), normal=(0, 1, 0), surface=mpm.surface_slip)
+mpm.add_surface_collider(point=(0, 0, 0), normal=(0, 1, 0), surface=mpm.surface_slip, friction=0.5)
 
 triangles = load_mesh('taichi.ply', scale=0.02, offset=(0.5, 0.6, 0.5))
 

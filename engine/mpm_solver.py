@@ -185,7 +185,7 @@ class MPMSolver:
 
     @ti.kernel
     def build_pid(self):
-        ti.block_dim(64)
+        ti.block_dim(1)
         for p in self.x:
             base = int(ti.floor(self.x[p] * self.inv_dx - 0.5))
             ti.append(self.pid.parent(), base - ti.Vector(list(self.offset)),

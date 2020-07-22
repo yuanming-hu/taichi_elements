@@ -521,7 +521,8 @@ def render_frame(f, spp, delta):
                     (time.time() - last_t) * 1000 / interval))
             last_t = time.time()
             gui.set_image(img)
-    gui.show(f'rendered/{f:05d}{delta}.png')
+    # gui.show(f'rendered/{f:05d}{delta}.png')
+    gui.core.screenshot(f'rendered/{f:05d}{delta}.png')
     
     print(f'Frame rendered. {spp} take {time.time() - t} s.')
 
@@ -529,7 +530,7 @@ def main():
     for f in range(int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4])):
         print(f'frame {f}')
         initialize(f=f, delta=0)
-        render_frame(f, 50, delta=0)
+        render_frame(f, 200, delta=0)
         
 if __name__ == '__main__':
     main()
