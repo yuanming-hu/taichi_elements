@@ -1,5 +1,6 @@
 import taichi as ti
 import numpy as np
+import time
 import numbers
 import math
 
@@ -364,8 +365,12 @@ class MPMSolver:
             self.v[p], self.C[p] = new_v, new_C
             self.x[p] += dt * self.v[p]  # advection
             
-    def step(self, frame_dt):
+    def step(self, frame_dt, print_stat=False):
+        begin_t = time.time()
+        begin_substep = self.total_substeps
+
         substeps = int(frame_dt / self.default_dt) + 1
+        
         for i in range(substeps):
             self.total_substeps += 1
             dt = frame_dt / substeps
@@ -377,6 +382,12 @@ class MPMSolver:
             for p in self.grid_postprocess:
                 p(dt)
             self.g2p(dt)
+            
+        if print_stat:
+            ti.kernel_profiler_print()
+            print(f'num particles={self.n_particles[None]}, frame time {time.time() - begin_t:.3f} s,'
+                  f'substep time {1000 * (time.time() - begin_t) / (self.total_substeps - begin_substep):.3f} ms')
+            
 
     @ti.func
     def seed_particle(self, i, x, material, color, velocity):

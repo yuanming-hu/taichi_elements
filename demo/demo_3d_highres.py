@@ -10,7 +10,7 @@ from engine.mpm_solver import MPMSolver
 write_to_disk = False
 
 # Try to run on GPU
-ti.init(arch=ti.cuda, kernel_profiler=True)
+ti.init(arch=ti.cuda, kernel_profiler=True, use_unified_memory=False, device_memory_GB=8)
 
 gui = ti.GUI("MLS-MPM", res=512, background_color=0x112F41)
 
@@ -40,9 +40,9 @@ def load_mesh(fn, scale, offset):
     return triangles
 
 
-R = 512
+R = 256
 
-mpm = MPMSolver(res=(R, R, R), size=1, unbounded=True)
+mpm = MPMSolver(res=(R, R, R), size=1, unbounded=False)
 
 # mpm.add_surface_collider(point=(0, 0, 0), normal=(0, 1, 0), surface=mpm.surface_slip)
 
@@ -87,6 +87,19 @@ def add_snow_brick(i):
                       color=0xFFFFFF)
 
 
+def visualize(particles):
+    np_x = particles['position'] / 1.0
+    
+    # simple camera transform
+    screen_x = ((np_x[:, 0] + np_x[:, 2]) / 2**0.5) - 0.2
+    screen_y = (np_x[:, 1])
+    
+    screen_pos = np.stack([screen_x, screen_y], axis=-1)
+    
+    gui.circles(screen_pos, radius=1.1, color=particles['color'])
+    if frame % 5 == 0:
+        gui.show(f'{frame:06d}.png' if write_to_disk else None)
+
 for frame in range(1500):
     if water_ball_start <= frame < water_ball_start + n_balls:
         add_water_ball(frame - water_ball_start)
@@ -102,29 +115,15 @@ for frame in range(1500):
                      velocity=(0, -1, 0))
 
     print(f'frame {frame}')
-    print(f'num particles={mpm.n_particles[None]}')
-    t = time.time()
-    step = mpm.total_substeps
-    mpm.step(4e-3)
-    ti.kernel_profiler_print()
-    print(f'step time {time.time() - t} s')
-    print(
-        f'sub step time {1000 * (time.time() - t) / (mpm.total_substeps - step):.3f} ms'
-    )
-    particles = mpm.particle_info()
-    np_x = particles['position'] / 1.0
+    mpm.step(4e-3, print_stat=True)
+    if frame % 5 == 0:
+        particles = mpm.particle_info()
+        visualize(particles)
 
-    # simple camera transform
-    screen_x = ((np_x[:, 0] + np_x[:, 2]) / 2**0.5) - 0.2
-    screen_y = (np_x[:, 1])
-
-    screen_pos = np.stack([screen_x, screen_y], axis=-1)
-
-    gui.circles(screen_pos, radius=1.1, color=particles['color'])
-    gui.show(f'{frame:06d}.png' if write_to_disk else None)
-
-    output_fn = f'{output_dir}/{frame:05d}.npz'
-    np.savez_compressed(output_fn,
-                        x=particles['position'],
-                        v=particles['velocity'],
-                        c=particles['color'])
+    if write_to_disk:
+        particles = mpm.particle_info()
+        output_fn = f'{output_dir}/{frame:05d}.npz'
+        np.savez_compressed(output_fn,
+                            x=particles['position'],
+                            v=particles['velocity'],
+                            c=particles['color'])
