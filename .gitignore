@@ -14,5 +14,6 @@ blender/engine
 *.mp4
 rendered
 particles_*
+sim_*
 *.bin
 *.nvdb

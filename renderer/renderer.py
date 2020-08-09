@@ -41,7 +41,7 @@ class Renderer:
 
         self.particle_x = ti.Vector(3, dt=ti.f32)
         self.particle_v = ti.Vector(3, dt=ti.f32)
-        self.particle_ciolor = ti.Vector(3, dt=ti.f32)
+        self.particle_color = ti.Vector(3, dt=ti.f32)
         self.pid = ti.var(ti.i32)
         self.num_particles = ti.var(ti.i32, shape=())
 
@@ -61,25 +61,25 @@ class Renderer:
         self.camera_pos = ti.Vector([0.5, 0.27, 2.7])
         self.supporter = 2
         self.shutter_time = 2e-3  # half the frame time
-        sphere_radius = 0.0008
+        self.sphere_radius = 0.0008
         self.particle_grid_offset = [-self.particle_grid_res // 2 for _ in range(3)]
 
-        voxel_grid_visualization_block_size = 1
-        self.voxel_grid_res = self.particle_grid_res // voxel_grid_visualization_block_size
+        self.voxel_grid_visualization_block_size = 1
+        self.voxel_grid_res = self.particle_grid_res // self.voxel_grid_visualization_block_size
         voxel_grid_offset = [-self.voxel_grid_res // 2 for _ in range(3)]
-        max_num_particles_per_cell = 8192 * 1024
-        max_num_particles = 1024 * 1024 * 128
+        self.max_num_particles_per_cell = 8192 * 1024
+        self.max_num_particles = 1024 * 1024 * 128
 
-        self.voxel_dx = self.dx * voxel_grid_visualization_block_size
+        self.voxel_dx = self.dx * self.voxel_grid_visualization_block_size
         self.voxel_inv_dx = 1 / self.voxel_dx
 
-        assert sphere_radius * 2 < self.dx
+        assert self.sphere_radius * 2 < self.dx
 
         ti.root.dense(ti.ij, res).place(self.color_buffer)
 
         self.particle_bucket = ti.root.pointer(ti.ijk, self.particle_grid_res // 8)
         self.particle_bucket.dense(ti.ijk,
-                              8).dynamic(ti.l, max_num_particles_per_cell,
+                              8).dynamic(ti.l, self.max_num_particles_per_cell,
                                          256).place(self.pid,
                                                     offset=self.particle_grid_offset + [0])
 
@@ -88,8 +88,8 @@ class Renderer:
         voxel_block = ti.root.pointer(ti.ijk, self.voxel_grid_res // 8)
         voxel_block.dense(ti.ijk, 8).place(self.voxel_grid_density, offset=voxel_grid_offset)
 
-        ti.root.dense(ti.l, max_num_particles).place(self.particle_x, self.particle_v,
-                                                     self.particle_ciolor)
+        ti.root.dense(ti.l, self.max_num_particles).place(self.particle_x, self.particle_v,
+                                                     self.particle_color)
 
 
     @ti.func
@@ -248,7 +248,7 @@ class Renderer:
     def inside_particle_grid(self, ipos):
         pos = ipos * self.dx
         return self.bbox[0][0] <= pos[0] and pos[0] < self.bbox[1][0] and self.bbox[0][1] <= pos[
-            1] and self.pos[1] < self.bbox[1][1] and self.bbox[0][2] <= pos[2] and pos[2] < self.bbox[
+            1] and pos[1] < self.bbox[1][1] and self.bbox[0][2] <= pos[2] and pos[2] < self.bbox[
                 1][2]
 
 
@@ -288,7 +288,7 @@ class Renderer:
             running = 1
             # DDA for voxels with at least one particle
             while running:
-                inside = inside_particle_grid(ipos)
+                inside = self.inside_particle_grid(ipos)
 
                 if inside:
                     # once we actually intersect with a voxel that contains at least one particle, loop over the particle list
@@ -357,7 +357,7 @@ class Renderer:
 
 
     @ti.kernel
-    def render(self, f: ti.i32):
+    def render(self):
         for u, v in self.color_buffer:
             pos = self.camera_pos
             d = ti.Vector([(2 * fov * (u + ti.random(ti.f32)) / res[1] -
@@ -423,28 +423,28 @@ class Renderer:
             self.color_buffer[u, v] += contrib
 
 
-    support = 2
 
 
     @ti.kernel
     def initialize_particle_grid(self):
+        support = 2
         for p in range(self.num_particles[None]):
             v = self.particle_v[p]
             x = self.particle_x[p] + (shutter_begin + 0.5) * self.shutter_time * v
-            ipos = ti.floor(x * inv_dx).cast(ti.i32)
+            ipos = ti.floor(x * self.inv_dx).cast(ti.i32)
             for i in range(-support, support + 1):
                 for j in range(-support, support + 1):
                     for k in range(-support, support + 1):
                         offset = ti.Vector([i, j, k])
                         box_ipos = ipos + offset
-                        if inside_particle_grid(box_ipos):
+                        if self.inside_particle_grid(box_ipos):
                             box_min = box_ipos * self.dx
                             box_max = (box_ipos + ti.Vector([1, 1, 1])) * self.dx
                             if sphere_aabb_intersect_motion(
                                     box_min, box_max,
                                     x + shutter_begin * self.shutter_time * v,
                                     x + (shutter_begin + 1) * self.shutter_time * v,
-                                    sphere_radius):
+                                    self.sphere_radius):
                                 ti.append(
                                     self.pid.parent(),
                                     box_ipos - ti.Vector(self.particle_grid_offset), p)
@@ -475,7 +475,7 @@ class Renderer:
                 self.particle_x[i][c] = x[i, c]
                 self.particle_v[i][c] = v[i, c]
 
-                # self.particle_ciolor[i][c] = (color[i] // 256 ** (2 - c)) % 256 * (1 / 255)
+                # self.particle_color[i][c] = (color[i] // 256 ** (2 - c)) % 256 * (1 / 255)
                 if cg == c:
                     self.particle_color[i][c] = 1.0
                 else:
@@ -495,26 +495,14 @@ class Renderer:
         self.color_buffer.fill(0)
 
 
-    def initialize(self, f):
+    def initialize_particles(self, particle_fn):
         self.reset()
 
-        rand = False
-
-        if rand:
-            num_part = 100000
-            s = (1 + f) * 0.5
-            np_x = (np.random.rand(num_part, 3).astype(np.float32)) * s - 0.2
-            # np_x[1] += 0.5# * (s + )
-            np_v = np.random.rand(num_part, 3).astype(np.float32) * 0.1 - 0.05
-            np_c = np.zeros(num_part).astype(np.int32)
-            np_c[:] = int(0.85 * 256) * 256**2 + int(0.9 * 256) * 256 + int(
-                0.98 * 256)
-        else:
-            data = np.load(f'{sys.argv[1]}/{f:05d}.npz')
-            np_x = data['x']
-            num_part = len(np_x)
-            np_v = data['v']
-            np_c = data['c']
+        data = np.load(particle_fn)
+        np_x = data['x']
+        num_part = len(np_x)
+        np_v = data['v']
+        np_c = data['c']
 
         assert num_part <= self.max_num_particles
 
@@ -527,15 +515,15 @@ class Renderer:
         self.num_particles[None] = num_part
         print('num_input_particles =', num_part)
 
-        initialize_particle_x(np_x, np_v, np_c)
-        initialize_particle_grid()
+        self.initialize_particle_x(np_x, np_v, np_c)
+        self.initialize_particle_grid()
 
 
 
-    def render_frame(self, f, spp):
+    def render_frame(self, spp):
         last_t = 0
         for i in range(1, 1 + spp):
-            self.render(f)
+            self.render()
 
             interval = 20
             if i % interval == 0:

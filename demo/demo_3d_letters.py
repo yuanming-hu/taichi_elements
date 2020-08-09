@@ -23,7 +23,7 @@ if with_gui:
     gui = ti.GUI("MLS-MPM", res=512, background_color=0x112F41)
 
 if write_to_disk:
-    output_dir = create_output_folder('./particles')
+    output_dir = create_output_folder('./sim')
 
 
 def load_mesh(fn, scale, offset):

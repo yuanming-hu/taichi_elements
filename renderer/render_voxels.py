@@ -78,7 +78,7 @@ def main():
         fn = output_fn(f)
         if os.path.exists(output_fn(f)):
             continue
-        img = renderer.render_frame(f, spp=spp)
+        img = renderer.render_frame(spp=spp)
         ti.imwrite(img, fn)
         if gui:
             gui.set_image(img)
