@@ -7,9 +7,6 @@ import sys
 from renderer_utils import out_dir, ray_aabb_intersection, inf, eps, \
   intersect_sphere, sphere_aabb_intersect_motion, inside_taichi
 
-ti.init(arch=ti.cuda, use_unified_memory=False, device_memory_fraction=0.8)
-
-
 res = 1280, 720
 
 
@@ -18,7 +15,7 @@ os.makedirs('rendered', exist_ok=True)
 num_spheres = 1024
 color_buffer = ti.Vector(3, dt=ti.f32)
 bbox = ti.Vector(3, dt=ti.f32, shape=2)
-voxel_grid_density = ti.var(dt=ti.i32)
+voxel_grid_density = ti.var(dt=ti.f32)
 voxel_has_particle = ti.var(dt=ti.i32)
 max_ray_depth = 4
 use_directional_light = True
@@ -44,22 +41,33 @@ light_color = [1.0, 1.0, 1.0]
 
 frame_id = 0
 
-render_voxel = False  # see dda()
-inv_dx = 256.0
+render_voxel = True
+
+grid_down_sample = 1
+if grid_down_sample == 1:
+    voxel_edges = 0.2
+else:
+    voxel_edges = 0.1
+
+particle_grid_res = 2048 // grid_down_sample
+inv_dx = particle_grid_res * 0.25
+
 dx = 1.0 / inv_dx
 
 camera_pos = ti.Vector([0.5, 0.27, 2.7])
 supporter = 2
 shutter_time = 2e-3  # half the frame time
 sphere_radius = 0.0008
-particle_grid_res = 1024
 particle_grid_offset = [-particle_grid_res // 2 for _ in range(3)]
 
-voxel_grid_visualization_block_size = 16
+voxel_grid_visualization_block_size = 1
 voxel_grid_res = particle_grid_res // voxel_grid_visualization_block_size
 voxel_grid_offset = [-voxel_grid_res // 2 for _ in range(3)]
 max_num_particles_per_cell = 8192 * 1024
 max_num_particles = 1024 * 1024 * 128
+
+voxel_dx = dx * voxel_grid_visualization_block_size
+voxel_inv_dx = 1 / voxel_dx
 
 assert sphere_radius * 2 < dx
 
@@ -73,10 +81,8 @@ particle_bucket.dense(ti.ijk,
 
 ti.root.pointer(ti.ijk, particle_grid_res // 8).dense(ti.ijk, 8).place(
     voxel_has_particle, offset=particle_grid_offset)
-ti.root.pointer(ti.ijk,
-                voxel_grid_res // 8).dense(ti.ijk,
-                                           8).place(voxel_grid_density,
-                                                    offset=voxel_grid_offset)
+voxel_block = ti.root.pointer(ti.ijk, voxel_grid_res // 8)
+voxel_block.dense(ti.ijk, 8).place(voxel_grid_density, offset=voxel_grid_offset)
 
 ti.root.dense(ti.l, max_num_particles).place(particle_x, particle_v,
                                              particle_color)
@@ -84,15 +90,13 @@ ti.root.dense(ti.l, max_num_particles).place(particle_x, particle_v,
 
 @ti.func
 def inside_grid(ipos):
-    return ipos.min() >= 0 and ipos.max() < voxel_grid_res
-
+    return ipos.min() >= -voxel_grid_res // 2 and ipos.max() < voxel_grid_res // 2
 
 # The dda algorithm requires the voxel grid to have one surrounding layer of void region
 # to correctly render the outmost voxel faces
 @ti.func
 def inside_grid_loose(ipos):
-    return ipos.min() >= -1 and ipos.max() <= voxel_grid_res
-
+    return ipos.min() >= -voxel_grid_res // 2 - 1 and ipos.max() <= voxel_grid_res // 2
 
 @ti.func
 def query_density_int(ipos):
@@ -107,11 +111,11 @@ def query_density_int(ipos):
 
 @ti.func
 def voxel_color(pos):
-    p = pos * voxel_grid_res
+    p = pos * inv_dx
 
     p -= ti.floor(p)
 
-    boundary = 0.1
+    boundary = voxel_edges
     count = 0
     for i in ti.static(range(3)):
         if p[i] < boundary or p[i] > 1 - boundary:
@@ -119,7 +123,7 @@ def voxel_color(pos):
     f = 0.0
     if count >= 2:
         f = 1.0
-    return ti.Vector([0.2, 0.3, 0.2]) * (2.3 - 2 * f)
+    return ti.Vector([0.9, 0.8, 1.0]) * (1.3 - 1.2 * f)
 
 
 @ti.func
@@ -191,8 +195,8 @@ def dda(eye_pos, d):
         else:
             rsign[i] = -1
 
-    bbox_min = ti.Vector([0.0, 0.0, 0.0]) - 10 * eps
-    bbox_max = ti.Vector([1.0, 1.0, 1.0]) + 10 * eps
+    bbox_min = bbox[0]
+    bbox_max = bbox[1]
     inter, near, far = ray_aabb_intersection(bbox_min, bbox_max, eye_pos, d)
     hit_distance = inf
     normal = ti.Vector([0.0, 0.0, 0.0])
@@ -202,7 +206,7 @@ def dda(eye_pos, d):
 
         pos = eye_pos + d * (near + 5 * eps)
 
-        o = voxel_grid_res * pos
+        o = voxel_inv_dx * pos
         ipos = ti.floor(o).cast(int)
         dis = (ipos - o + 0.5 + rsign * 0.5) * rinv
         running = 1
@@ -217,7 +221,7 @@ def dda(eye_pos, d):
             if last_sample:
                 mini = (ipos - o + ti.Vector([0.5, 0.5, 0.5]) -
                         rsign * 0.5) * rinv
-                hit_distance = mini.max() * (1 / voxel_grid_res) + near
+                hit_distance = mini.max() * voxel_dx + near
                 hit_pos = eye_pos + hit_distance * d
                 c = voxel_color(hit_pos)
                 running = 0
@@ -355,7 +359,6 @@ aspect_ratio = res[0] / res[1]
 def render(f: ti.i32):
     for u, v in color_buffer:
         pos = camera_pos
-        pos.z += f * 0.0002
         d = ti.Vector([(2 * fov * (u + ti.random(ti.f32)) / res[1] -
                         fov * aspect_ratio - 1e-5),
                        2 * fov * (v + ti.random(ti.f32)) / res[1] - fov - 1e-5,
@@ -484,11 +487,15 @@ def initialize_particle_x(x: ti.ext_arr(), v: ti.ext_arr(),
                                voxel_grid_visualization_block_size] = 1
 
 
-def initialize(f, delta):
+def reset():
     particle_bucket.deactivate_all()
     voxel_grid_density.snode().parent(n=2).deactivate_all()
     voxel_has_particle.snode().parent(n=2).deactivate_all()
     color_buffer.fill(0)
+
+
+def initialize(f):
+    reset()
 
     rand = False
 
@@ -507,8 +514,6 @@ def initialize(f, delta):
         num_part = len(np_x)
         np_v = data['v']
         np_c = data['c']
-
-    np_x += (delta - 1) * np_v * 2e-3
 
     assert num_part <= max_num_particles
 
