@@ -9,9 +9,12 @@ from renderer_utils import out_dir, ray_aabb_intersection, inf, eps, \
 
 ti.init(arch=ti.cuda, use_unified_memory=False, device_memory_fraction=0.8)
 
-os.makedirs('rendered', exist_ok=True)
 
 res = 1280, 720
+
+
+os.makedirs('rendered', exist_ok=True)
+
 num_spheres = 1024
 color_buffer = ti.Vector(3, dt=ti.f32)
 bbox = ti.Vector(3, dt=ti.f32, shape=2)
@@ -522,18 +525,8 @@ def initialize(f, delta):
     initialize_particle_grid()
 
 
-with_gui = False
 
-if with_gui:
-    gui = ti.GUI('Particle Renderer', res)
-
-
-def output_fn(f, delta):
-    return f'rendered/{f:05d}{delta}.png'
-
-
-def render_frame(f, spp, delta):
-    t = time.time()
+def render_frame(f, spp):
     last_t = 0
     for i in range(1, 1 + spp):
         render(f)
@@ -541,28 +534,11 @@ def render_frame(f, spp, delta):
         interval = 20
         if i % interval == 0:
             if last_t != 0:
+                ti.sync()
                 print("time per spp = {:.2f} ms".format(
                     (time.time() - last_t) * 1000 / interval))
             last_t = time.time()
-            if with_gui:
-                gui.set_image(img)
-                gui.show(f'rendered/{f:05d}{delta}.png')
+
     img = np.zeros((res[0], res[1], 3), dtype=np.float32)
-    copy(img, i + 1)
-    ti.imwrite(img, output_fn(f, delta))
-
-    print(f'Frame rendered. {spp} take {time.time() - t} s.')
-
-
-def main():
-    for f in range(int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4])):
-        print(f'frame {f}')
-        if os.path.exists(output_fn(f, 0)):
-            continue
-        initialize(f=f, delta=0)
-        render_frame(f, 200, delta=0)
-
-
-if __name__ == '__main__':
-    main()
-    ti.print_profile_info()
+    copy(img, spp)
+    return img
