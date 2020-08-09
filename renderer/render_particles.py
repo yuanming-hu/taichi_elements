@@ -2,6 +2,9 @@ import taichi as ti
 import os
 import sys
 import time
+
+ti.init(arch=ti.cuda, use_unified_memory=False, device_memory_fraction=0.8)
+
 from renderer import initialize, render_frame, res
 
 with_gui = True
@@ -21,7 +24,7 @@ def main():
         fn = output_fn(f)
         if os.path.exists(output_fn(f)):
             continue
-        initialize(f=f, delta=0)
+        initialize(f=f)
         img = render_frame(f, spp=spp)
         ti.imwrite(img, fn)
         if gui:
