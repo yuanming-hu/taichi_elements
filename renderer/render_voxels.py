@@ -10,8 +10,7 @@ from renderer import Renderer, res
 grid_down_sample = 1
 
 renderer = Renderer(dx=grid_down_sample / 1024,
-                    render_voxel=True,
-                    grid_down_sample=grid_down_sample)
+                    render_voxel=True)
 
 with_gui = True
 if with_gui:

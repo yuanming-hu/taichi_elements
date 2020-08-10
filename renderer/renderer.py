@@ -355,6 +355,7 @@ class Renderer:
 
     @ti.kernel
     def render(self):
+        ti.block_dim(256)
         for u, v in self.color_buffer:
             pos = self.camera_pos
             d = ti.Vector([
