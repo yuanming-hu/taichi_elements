@@ -8,7 +8,7 @@ import utils
 from utils import create_output_folder
 from engine.mpm_solver import MPMSolver
 
-with_gui = True
+with_gui = False
 write_to_disk = True
 
 # Try to run on GPU
@@ -17,13 +17,13 @@ ti.init(arch=ti.cuda,
         use_unified_memory=False,
         device_memory_fraction=0.7)
 
-max_num_particles = 10000000
+max_num_particles = 40000000
 
 if with_gui:
     gui = ti.GUI("MLS-MPM", res=512, background_color=0x112F41)
 
 if write_to_disk:
-    output_dir = create_output_folder('./sim')
+    output_dir = create_output_folder('/raid/yuanmingh/sim')
 
 
 def load_mesh(fn, scale, offset):
@@ -50,7 +50,7 @@ def load_mesh(fn, scale, offset):
 
 R = 512
 
-mpm = MPMSolver(res=(R, R, R), size=1, unbounded=True, dt_scale=1, E_scale=1)
+mpm = MPMSolver(res=(R, R, R), size=1, unbounded=True, dt_scale=0.5, E_scale=8)
 
 mpm.add_surface_collider(point=(0, 0, 0),
                          normal=(0, 1, 0),
@@ -84,32 +84,38 @@ counter = 0
 
 start_t = time.time()
 
-mpm.add_mesh(triangles=nanovdb_triangles,
-             material=MPMSolver.material_sand,
-             color=0xFFFF33,
-             velocity=(0, 0, 0),
-             translation=(0.0, 0.2, 0.0))
 
 for frame in range(15000):
     print(f'frame {frame}')
     t = time.time()
+
+    if frame % 50 == 0 and mpm.n_particles[None] < max_num_particles:
+        F = frame // 50
+        r = 255 if F % 3 == 0 else 128
+        g = 255 if F % 3 == 1 else 128
+        b = 255 if F % 3 == 2 else 128
+        mpm.add_mesh(triangles=nanovdb_triangles,
+                     material=MPMSolver.material_elastic,
+                     color=r * 65536 + g * 256 + b,
+                     velocity=(0, -6, 0),
+                     translation=(0.0, 0.16, (F % 2) * 0.4))
 
     if frame > 60 and mpm.n_particles[None] < max_num_particles:
         i = frame % 3 - 1.5
         j = 0  # frame / 4 % 4 - 1
         colors = [0xFF8888, 0xEEEEFF, 0xFFFF55]
         materials = [
-            MPMSolver.material_elastic, MPMSolver.material_snow,
-            MPMSolver.material_sand
+            MPMSolver.material_elastic, MPMSolver.material_elastic,
+            MPMSolver.material_elastic
         ]
         mpm.add_mesh(triangles=nanovdb_triangles_small,
                      material=materials[frame % 3],
                      color=colors[frame % 3],
-                     velocity=(0, -4, 0),
-                     translation=((i + 0.5) * 0.33, 0.2, (2 - j) * 0.1))
+                     velocity=(0, -6, 0),
+                     translation=((i + 0.5) * 0.33, 0.13, 0.2))
 
     mpm.step(4e-3, print_stat=True)
-    if with_gui and frame % 1 == 0:
+    if with_gui and frame % 10 == 0:
         particles = mpm.particle_info()
         visualize(particles)
 

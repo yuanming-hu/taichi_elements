@@ -150,7 +150,7 @@ class Renderer:
             o -= ti.Vector([0.5, 0.002, 0.5])
             dist = (o.abs() - ti.Vector([0.5, 0.02, 0.5])).max()
         else:
-            dist = o[1] - 0.001
+            dist = o[1] + 0.002
 
         return dist
 

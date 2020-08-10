@@ -7,9 +7,9 @@ ti.init(arch=ti.cuda, use_unified_memory=False, device_memory_fraction=0.8)
 
 from renderer import Renderer, res
 
-grid_down_sample = 1
+grid_down_sample = 8
 
-renderer = Renderer(dx=grid_down_sample / 1024, render_voxel=True)
+renderer = Renderer(dx=grid_down_sample / 512, render_voxel=True)
 
 with_gui = True
 if with_gui:
@@ -17,9 +17,11 @@ if with_gui:
 
 spp = 200
 
+output_folder = 'rendered_voxels'
+os.makedirs(output_folder, exist_ok=True)
 
 def output_fn(f):
-    return f'rendered/{f:05d}.png'
+    return f'{output_folder}/{f:05d}.png'
 
 
 @ti.kernel
@@ -72,8 +74,8 @@ def load_vdb():
 
 
 def main():
-    for f in range(100):
-        fn = "00000.nvdb"
+    for f in range(int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4])):
+        fn = f"{sys.argv[1]}/{f:05d}.nvdb"
         ti.get_runtime().materialize()
         ti.get_runtime().prog.load_vdb(0, fn)
 
@@ -87,10 +89,9 @@ def main():
         img = renderer.render_frame(spp=spp)
         ti.imwrite(img, fn)
         if gui:
-            gui.set_image(img)
-            gui.show()
-            gui.set_image(img)
-            gui.show()
+            while True:
+                gui.set_image(img)
+                gui.show()
 
         print(f'Frame rendered. {spp} take {time.time() - t} s.')
 

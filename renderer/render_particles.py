@@ -12,7 +12,7 @@ from renderer import res, Renderer
 # renderer = Renderer(dx=1 / 512, shutter_time=2e-3)
 renderer = Renderer(dx=1 / 512, shutter_time=2e-3, taichi_logo=False)
 
-with_gui = True
+with_gui = False
 if with_gui:
     gui = ti.GUI('Particle Renderer', res)
 
@@ -21,13 +21,16 @@ spp = 200
 
 def main():
     for f in range(int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4])):
+        print('frame', f)
+        output_fn = f'rendered/{f:05d}.png'
+        if os.path.exists(output_fn):
+            continue
         t = time.time()
         renderer.initialize_particles(f'{sys.argv[1]}/{f:05d}.npz')
         print('Average particle_list_length',
               renderer.average_particle_list_length())
         img = renderer.render_frame(spp=spp)
 
-        output_fn = 'rendered/{:05d}.png'
 
         if with_gui:
             gui.set_image(img)
