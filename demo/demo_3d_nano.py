@@ -17,7 +17,7 @@ ti.init(arch=ti.cuda,
         use_unified_memory=False,
         device_memory_fraction=0.7)
 
-max_num_particles = 20000000
+max_num_particles = 10000000
 
 if with_gui:
     gui = ti.GUI("MLS-MPM", res=512, background_color=0x112F41)
@@ -48,7 +48,7 @@ def load_mesh(fn, scale, offset):
     return triangles
 
 
-R = 256
+R = 512
 
 mpm = MPMSolver(res=(R, R, R), size=1, unbounded=True, dt_scale=1, E_scale=1)
 
