@@ -49,7 +49,8 @@ class MPMSolver:
             padding=3,
             unbounded=False,
             dt_scale=1,
-            E_scale=1):
+            E_scale=1,
+            voxelizer_super_sample=2):
         self.dim = len(res)
         assert self.dim in (
             2, 3), "MPM solver supports only 2D and 3D simulations."
@@ -148,8 +149,11 @@ class MPMSolver:
                 from engine.voxelizer import Voxelizer
             self.voxelizer = Voxelizer(res=self.res,
                                        dx=self.dx,
-                                       padding=self.padding)
+                                       padding=self.padding,
+                                       super_sample=voxelizer_super_sample)
             self.set_gravity((0, -9.8, 0))
+        
+        self.voxelizer_super_sample = voxelizer_super_sample
 
         self.grid_postprocess = []
 
@@ -554,17 +558,18 @@ class MPMSolver:
         for i, j, k in self.voxelizer.voxels:
             inside = 1
             for d in ti.static(range(3)):
-                inside = inside and self.padding <= i and i < self.res[
-                    d] - self.padding
+                inside = inside and -self.grid_size // 2 + self.padding <= i and i < self.grid_size // 2 - self.padding
             if inside and self.voxelizer.voxels[i, j, k] > 0:
-                for l in range(sample_density):
-                    x = ti.Vector(
-                        [ti.random() + i,
-                         ti.random() + j,
-                         ti.random() + k]) * self.dx + self.source_bound[0]
-                    p = ti.atomic_add(self.n_particles[None], 1)
-                    self.seed_particle(p, x, material, color,
-                                       self.source_velocity[None])
+                s = sample_density / self.voxelizer_super_sample ** self.dim
+                for l in range(sample_density + 1):
+                    if ti.random() + l < s:
+                        x = ti.Vector(
+                            [ti.random() + i,
+                             ti.random() + j,
+                             ti.random() + k]) * (self.dx / self.voxelizer_super_sample) + self.source_bound[0]
+                        p = ti.atomic_add(self.n_particles[None], 1)
+                        self.seed_particle(p, x, material, color,
+                                           self.source_velocity[None])
 
     def add_mesh(self,
                  triangles,
