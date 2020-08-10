@@ -57,8 +57,12 @@ mpm.add_surface_collider(point=(0, 0, 0),
                          surface=mpm.surface_slip,
                          friction=0.5)
 
-nanovdb_triangles = load_mesh('nanovdb.ply', scale=0.04, offset=(0.5, 0.5, 0.5))
-nanovdb_triangles_small = load_mesh('nanovdb.ply', scale=0.01, offset=(0.5, 0.5, 0.5))
+nanovdb_triangles = load_mesh('nanovdb.ply',
+                              scale=0.04,
+                              offset=(0.5, 0.5, 0.5))
+nanovdb_triangles_small = load_mesh('nanovdb.ply',
+                                    scale=0.01,
+                                    offset=(0.5, 0.5, 0.5))
 
 mpm.set_gravity((0, -25, 0))
 
@@ -89,16 +93,15 @@ mpm.add_mesh(triangles=nanovdb_triangles,
 for frame in range(15000):
     print(f'frame {frame}')
     t = time.time()
-    
+
     if frame > 100 and mpm.n_particles[None] < max_num_particles:
         i = frame % 4 - 2
-        j = 0 # frame / 4 % 4 - 1
+        j = 0  # frame / 4 % 4 - 1
         mpm.add_mesh(triangles=nanovdb_triangles_small,
                      material=MPMSolver.material_elastic,
                      color=0xFFFFFF,
                      velocity=(0, -10, 0),
                      translation=((i + 0.5) * 0.25, 0, (2 - j) * 0.1))
-
 
     mpm.step(2e-3, print_stat=True)
     if with_gui and frame % 1 == 0:
