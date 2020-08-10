@@ -15,7 +15,8 @@ use_directional_light = True
 
 fov = 0.23
 dist_limit = 100
-shutter_begin = -1
+# TODO: why doesn't it render normally when shutter_begin = -1?
+shutter_begin = -0.5
 
 exposure = 1.5
 light_direction = [1.2, 0.3, 0.7]
@@ -29,10 +30,12 @@ class Renderer:
                  dx=1 / 1024,
                  sphere_radius=0.3 / 1024,
                  render_voxel=False,
-                 shutter_time=1e-3):
+                 shutter_time=1e-3,
+                 taichi_logo=True):
         self.vignette_strength = 0.9
         self.vignette_radius = 0.0
         self.vignette_center = [0.5, 0.5]
+        self.taichi_logo = taichi_logo
 
         self.color_buffer = ti.Vector.field(3, dtype=ti.f32)
         self.bbox = ti.Vector.field(3, dtype=ti.f32, shape=2)
@@ -178,9 +181,13 @@ class Renderer:
 
     @ti.func
     def sdf_color(self, p):
-        scale = 0.4
-        if inside_taichi(ti.Vector([p[0], p[2]])):
-            scale = 1
+        scale = 0.0
+        if ti.static(self.taichi_logo):
+            scale = 0.4
+            if inside_taichi(ti.Vector([p[0], p[2]])):
+                scale = 1
+        else:
+            scale = 1.0
         return ti.Vector([0.3, 0.5, 0.7]) * scale
 
     # Digital differential analyzer for the grid visualization (render_voxels=True)
@@ -423,15 +430,28 @@ class Renderer:
 
     @ti.kernel
     def initialize_particle_grid(self):
-        support = 2
         for p in range(self.num_particles[None]):
             v = self.particle_v[p]
-            x = self.particle_x[p] + (shutter_begin +
-                                      0.5) * self.shutter_time * v
+            x = self.particle_x[p]
             ipos = ti.floor(x * self.inv_dx).cast(ti.i32)
-            for i in range(-support, support + 1):
-                for j in range(-support, support + 1):
-                    for k in range(-support, support + 1):
+
+            offset_begin = shutter_begin * self.shutter_time * v
+            offset_end = (shutter_begin + 1.0) * self.shutter_time * v
+            offset_begin_grid = offset_begin
+            offset_end_grid = offset_end
+
+            for k in ti.static(range(3)):
+                if offset_end_grid[k] < offset_begin_grid[k]:
+                    t = offset_end_grid[k]
+                    offset_end_grid[k] = offset_begin_grid[k]
+                    offset_begin_grid[k] = t
+
+            offset_begin_grid = int(ti.floor(offset_begin_grid * self.inv_dx))
+            offset_end_grid = int(ti.ceil(offset_end_grid * self.inv_dx)) + 1
+
+            for i in range(offset_begin_grid[0], offset_end_grid[0]):
+                for j in range(offset_begin_grid[1], offset_end_grid[1]):
+                    for k in range(offset_begin_grid[2], offset_end_grid[2]):
                         offset = ti.Vector([i, j, k])
                         box_ipos = ipos + offset
                         if self.inside_particle_grid(box_ipos):
@@ -439,15 +459,13 @@ class Renderer:
                             box_max = (box_ipos +
                                        ti.Vector([1, 1, 1])) * self.dx
                             if sphere_aabb_intersect_motion(
-                                    box_min, box_max,
-                                    x + shutter_begin * self.shutter_time * v,
-                                    x +
-                                (shutter_begin + 1) * self.shutter_time * v,
-                                    self.sphere_radius):
+                                    box_min, box_max, x + offset_begin,
+                                    x + offset_end, self.sphere_radius):
                                 ti.append(
                                     self.pid.parent(), box_ipos -
                                     ti.Vector(self.particle_grid_offset), p)
                                 self.voxel_has_particle[box_ipos] = 1
+                                self.voxel_grid_density[box_ipos] = 1
 
     @ti.kernel
     def copy(self, img: ti.ext_arr(), samples: ti.i32):
@@ -464,24 +482,15 @@ class Renderer:
                                        exposure / samples)
 
     @ti.kernel
-    def initialize_particle_x(self, x: ti.ext_arr(), v: ti.ext_arr(),
-                              color: ti.ext_arr()):
+    def initialize_particle(self, x: ti.ext_arr(), v: ti.ext_arr(),
+                            color: ti.ext_arr()):
         for i in range(self.num_particles[None]):
-            cg = i // (56952 * 16) % 3
             for c in ti.static(range(3)):
                 self.particle_x[i][c] = x[i, c]
                 self.particle_v[i][c] = v[i, c]
 
-                # self.particle_color[i][c] = (color[i] // 256 ** (2 - c)) % 256 * (1 / 255)
-                if cg == c:
-                    self.particle_color[i][c] = 1.0
-                else:
-                    self.particle_color[i][c] = 0.5
-
-            for k in ti.static(range(27)):
-                base_coord = (self.inv_dx * self.particle_x[i] - 0.5).cast(
-                    ti.i32) + ti.Vector([k // 9, k // 3 % 3, k % 3])
-                self.voxel_grid_density[base_coord] = 1
+                self.particle_color[i][c] = (color[i] //
+                                             256**(2 - c)) % 256 * (1 / 255)
 
     @ti.kernel
     def average_particle_list_length(self) -> ti.f32:
@@ -521,7 +530,7 @@ class Renderer:
         self.num_particles[None] = num_part
         print('num_input_particles =', num_part)
 
-        self.initialize_particle_x(np_x, np_v, np_c)
+        self.initialize_particle(np_x, np_v, np_c)
         self.initialize_particle_grid()
 
     def render_frame(self, spp):

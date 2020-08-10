@@ -61,7 +61,7 @@ nanovdb_triangles = load_mesh('nanovdb.ply',
                               scale=0.04,
                               offset=(0.5, 0.5, 0.5))
 nanovdb_triangles_small = load_mesh('nanovdb.ply',
-                                    scale=0.01,
+                                    scale=0.0133,
                                     offset=(0.5, 0.5, 0.5))
 
 mpm.set_gravity((0, -25, 0))
@@ -86,29 +86,35 @@ start_t = time.time()
 
 mpm.add_mesh(triangles=nanovdb_triangles,
              material=MPMSolver.material_sand,
-             color=0xFFFFFF,
-             velocity=(0, -1, 0),
-             translation=(0.0, 0.25, 0.0))
+             color=0xFFFF33,
+             velocity=(0, 0, 0),
+             translation=(0.0, 0.2, 0.0))
 
 for frame in range(15000):
     print(f'frame {frame}')
     t = time.time()
 
-    if frame > 100 and mpm.n_particles[None] < max_num_particles:
-        i = frame % 4 - 2
+    if frame > 60 and mpm.n_particles[None] < max_num_particles:
+        i = frame % 3 - 1.5
         j = 0  # frame / 4 % 4 - 1
+        colors = [0xFF8888, 0xEEEEFF, 0xFFFF55]
+        materials = [
+            MPMSolver.material_elastic, MPMSolver.material_snow,
+            MPMSolver.material_sand
+        ]
         mpm.add_mesh(triangles=nanovdb_triangles_small,
-                     material=MPMSolver.material_elastic,
-                     color=0xFFFFFF,
-                     velocity=(0, -10, 0),
-                     translation=((i + 0.5) * 0.25, 0, (2 - j) * 0.1))
+                     material=materials[frame % 3],
+                     color=colors[frame % 3],
+                     velocity=(0, -4, 0),
+                     translation=((i + 0.5) * 0.33, 0.2, (2 - j) * 0.1))
 
-    mpm.step(2e-3, print_stat=True)
+    mpm.step(4e-3, print_stat=True)
     if with_gui and frame % 1 == 0:
         particles = mpm.particle_info()
         visualize(particles)
 
     if write_to_disk:
         mpm.dump_density(f'{output_dir}/{frame:05d}.nvdb')
+        mpm.write_particles(f'{output_dir}/{frame:05d}.npz')
     print(f'Frame total time {time.time() - t:.3f}')
     print(f'Total running time {time.time() - start_t:.3f}')
