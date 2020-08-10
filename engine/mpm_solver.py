@@ -48,7 +48,8 @@ class MPMSolver:
             # Max 128 MB particles
             padding=3,
             unbounded=False,
-            dt_scale=1):
+            dt_scale=1,
+            E_scale=1):
         self.dim = len(res)
         assert self.dim in (
             2, 3), "MPM solver supports only 2D and 3D simulations."
@@ -119,7 +120,7 @@ class MPMSolver:
         self.padding = padding
 
         # Young's modulus and Poisson's ratio
-        self.E, self.nu = 1e6 * size, 0.2
+        self.E, self.nu = 1e6 * size * E_scale, 0.2
         # Lame parameters
         self.mu_0, self.lambda_0 = self.E / (
             2 * (1 + self.nu)), self.E * self.nu / ((1 + self.nu) *
@@ -665,6 +666,13 @@ class MPMSolver:
         p.start()
 
         self.writers.append(p)
+
+
+    def dump_density(self, fn):
+        t = time.time()
+        ti.tools.dump_vdb(self.grid_m, offset=self.offset, fn=fn)
+        print(f'Writing to disk: {time.time() - t:.3f} s')
+
 
     def flush(self):
         for p in self.writers:
