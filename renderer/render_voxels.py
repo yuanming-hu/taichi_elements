@@ -2,22 +2,23 @@ import taichi as ti
 import os
 import sys
 import time
+from pathlib import Path
 
 ti.init(arch=ti.cuda, use_unified_memory=False, device_memory_fraction=0.8)
 
 from renderer import Renderer, res
 
-grid_down_sample = 8
+grid_down_sample = int(sys.argv[6])
 
-renderer = Renderer(dx=grid_down_sample / 512, render_voxel=True)
+renderer = Renderer(dx=grid_down_sample / 512, render_voxel=True, taichi_logo=False)
 
-with_gui = True
+with_gui = False
 if with_gui:
     gui = ti.GUI('Voxel Renderer', res)
 
 spp = 200
 
-output_folder = 'rendered_voxels'
+output_folder = sys.argv[5]
 os.makedirs(output_folder, exist_ok=True)
 
 def output_fn(f):
@@ -75,9 +76,18 @@ def load_vdb():
 
 def main():
     for f in range(int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4])):
-        fn = f"{sys.argv[1]}/{f:05d}.nvdb"
+        print('frame', f, end='')
+        fn = f'{output_folder}/{f:05d}.png'
+        if os.path.exists(fn):
+            print('skip.')
+            continue
+        else:
+            print('rendering...')
+        Path(fn).touch()
+
+        input_fn = f"{sys.argv[1]}/{f:05d}.nvdb"
         ti.get_runtime().materialize()
-        ti.get_runtime().prog.load_vdb(0, fn)
+        ti.get_runtime().prog.load_vdb(0, input_fn)
 
         renderer.reset()
 
@@ -85,13 +95,11 @@ def main():
 
         print(f'frame {f}')
         t = time.time()
-        fn = output_fn(f)
         img = renderer.render_frame(spp=spp)
         ti.imwrite(img, fn)
-        if gui:
-            while True:
-                gui.set_image(img)
-                gui.show()
+        if with_gui:
+            gui.set_image(img)
+            gui.show()
 
         print(f'Frame rendered. {spp} take {time.time() - t} s.')
 
