@@ -1,4 +1,5 @@
 import taichi as ti
+import random
 import math
 import time
 import numpy as np
@@ -17,7 +18,7 @@ ti.init(arch=ti.cuda,
         use_unified_memory=False,
         device_memory_fraction=0.7)
 
-max_num_particles = 4000000
+max_num_particles = 10000000
 
 if with_gui:
     gui = ti.GUI("MLS-MPM", res=512, background_color=0x112F41)
@@ -58,15 +59,14 @@ mpm.add_surface_collider(point=(0, 0, 0),
                          surface=mpm.surface_slip,
                          friction=0.5)
 
-triangles = load_mesh('taichi.ply', scale=0.04, offset=(0.5, 0.5, 0.5))
+triangles = load_mesh('kwai.ply', scale=0.04, offset=(0.5, 0.5, 0.5))
 triangles_small = load_mesh('taichi.ply',
-                                    scale=0.0133,
+                                    scale=0.02,
                                     offset=(0.5, 0.5, 0.5))
 
 mpm.set_gravity((0, -25, 0))
 
-
-def visualize(particles):
+def visualize(particles, f):
     np_x = particles['position'] / 1.0
 
     # simple camera transform
@@ -76,29 +76,31 @@ def visualize(particles):
     screen_pos = np.stack([screen_x, screen_y], axis=-1)
 
     gui.circles(screen_pos, radius=0.8, color=particles['color'])
-    gui.show()
+    gui.show(f'outputs/{f:04d}.png')
 
 
 counter = 0
 
 start_t = time.time()
 
-for frame in range(15000):
+stop_frame = 200
+
+for frame in range(300):
     print(f'frame {frame}')
     t = time.time()
 
-    if frame % 50 == 0 and mpm.n_particles[None] < max_num_particles:
-        F = frame // 50
+    if frame % 10 == 0 and frame < stop_frame:
+        F = frame // 10
         r = 255 if F % 3 == 0 else 128
         g = 255 if F % 3 == 1 else 128
         b = 255 if F % 3 == 2 else 128
         mpm.add_mesh(triangles=triangles,
                      material=MPMSolver.material_elastic,
                      color=r * 65536 + g * 256 + b,
-                     velocity=(0, -6, 0),
-                     translation=(0.0, 0.16, (F % 2) * 0.4))
+                     velocity=(0, -2, 0),
+                     translation=(0.0, 0.25, 0.4))
 
-    if frame > 60 and mpm.n_particles[None] < max_num_particles:
+    if frame > 20 and frame < stop_frame:
         i = frame % 3 - 1.5
         j = 0  # frame / 4 % 4 - 1
         colors = [0xFF8888, 0xEEEEFF, 0xFFFF55]
@@ -110,12 +112,12 @@ for frame in range(15000):
                      material=materials[frame % 3],
                      color=colors[frame % 3],
                      velocity=(0, -6, 0),
-                     translation=((i + 0.5) * 0.33, 0.13, 0.2))
+                     translation=((i + 0.5) * 0.33 + random.uniform(-0.02, 0.02), 0.13 + random.uniform(0, 0.05), 0.2))
 
-    mpm.step(4e-3, print_stat=True)
-    if with_gui and frame % 3 == 0:
+    mpm.step(8e-3, print_stat=True)
+    if with_gui:
         particles = mpm.particle_info()
-        visualize(particles)
+        visualize(particles, frame)
 
     if write_to_disk:
         mpm.write_particles(f'{output_dir}/{frame:05d}.npz')

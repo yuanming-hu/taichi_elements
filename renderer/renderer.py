@@ -31,7 +31,8 @@ class Renderer:
                  sphere_radius=0.3 / 1024,
                  render_voxel=False,
                  shutter_time=1e-3,
-                 taichi_logo=True):
+                 taichi_logo=True,
+                 camera_pos=[0.5, 0.27, 2.7]):
         self.vignette_strength = 0.9
         self.vignette_radius = 0.0
         self.vignette_center = [0.5, 0.5]
@@ -57,7 +58,7 @@ class Renderer:
         self.dx = dx
         self.inv_dx = 1 / self.dx
 
-        self.camera_pos = ti.Vector([0.5, 0.27, 2.7])
+        self.camera_pos = ti.Vector(camera_pos)
         self.supporter = 2
         self.shutter_time = shutter_time  # usually half the frame time
         self.sphere_radius = sphere_radius

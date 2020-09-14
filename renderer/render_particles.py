@@ -11,7 +11,7 @@ os.makedirs(output_folder, exist_ok=True)
 
 from renderer import res, Renderer
 
-renderer = Renderer(dx=1 / 512, shutter_time=2e-3, taichi_logo=False)
+renderer = Renderer(dx=1 / 256, sphere_radius=0.3 / 256, shutter_time=4e-3, taichi_logo=True, camera_pos=[0.5, 0.32, 3.3])
 
 with_gui = False
 if with_gui:
