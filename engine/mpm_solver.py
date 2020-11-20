@@ -493,6 +493,16 @@ class MPMSolver:
 
         self.seed(num_new_particles, material, color)
         self.n_particles[None] += num_new_particles
+        
+    @ti.kernel
+    def add_texture(self,
+                 offset_x: ti.f32,
+                    offset_y: ti.f32, texture: ti.ext_arr()):
+        for i, j in ti.ndrange(texture.shape[0], texture.shape[1]):
+            if texture[i, j] > 0.5:
+                pid = ti.atomic_add(self.n_particles[None], 1)
+                x = ti.Vector([offset_x + i * self.dx * 0.5, offset_y + j * self.dx * 0.5])
+                self.seed_particle(pid, x, self.material_elastic, 0xFFFFFF, self.source_velocity[None])
 
     @ti.func
     def random_point_in_unit_sphere(self):
