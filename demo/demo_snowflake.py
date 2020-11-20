@@ -11,7 +11,7 @@ ti.init(arch=ti.cuda)  # Try to run on GPU
 
 gui = ti.GUI("Taichi Elements", res=512, background_color=0x112F41)
 
-mpm = MPMSolver(res=(256, 256), E_scale=10)
+mpm = MPMSolver(res=(256, 256), E_scale=50)
 
 pattern = 1 - ti.imread('snowflake.png')[:, :, 1] * (1 / 255.0)
 pattern = cv2.resize(pattern, dsize=(256, 256), interpolation=cv2.INTER_CUBIC)
