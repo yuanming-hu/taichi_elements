@@ -55,6 +55,7 @@ class MPMSolver:
         assert self.dim in (
             2, 3), "MPM solver supports only 2D and 3D simulations."
 
+        self.t = 0.0
         self.res = res
         self.n_particles = ti.field(ti.i32, shape=())
         self.dx = size / res[0]
@@ -288,7 +289,7 @@ class MPMSolver:
                 self.grid_v[I] += dt * self.gravity[None]
 
     @ti.kernel
-    def grid_bounding_box(self, dt: ti.f32, unbounded: ti.template()):
+    def grid_bounding_box(self, t: ti.f32, dt: ti.f32, unbounded: ti.template()):
         for I in ti.grouped(self.grid_m):
             for d in ti.static(range(self.dim)):
                 if ti.static(unbounded):
@@ -309,7 +310,7 @@ class MPMSolver:
         center = list(center)
 
         @ti.kernel
-        def collide(dt: ti.f32):
+        def collide(t: ti.f32, dt: ti.f32):
             for I in ti.grouped(self.grid_m):
                 offset = I * self.dx - ti.Vector(center)
                 if offset.norm_sqr() < radius * radius:
@@ -345,7 +346,7 @@ class MPMSolver:
             raise ValueError('friction must be 0 on sticky surfaces.')
 
         @ti.kernel
-        def collide(dt: ti.f32):
+        def collide(t: ti.f32, dt: ti.f32):
             for I in ti.grouped(self.grid_m):
                 offset = I * self.dx - ti.Vector(point)
                 n = ti.Vector(normal)
@@ -375,7 +376,7 @@ class MPMSolver:
 
     def add_bounding_box(self, unbounded):
         self.grid_postprocess.append(
-            lambda dt: self.grid_bounding_box(dt, unbounded))
+            lambda t, dt: self.grid_bounding_box(t, dt, unbounded))
 
     @ti.kernel
     def g2p(self, dt: ti.f32):
@@ -420,7 +421,8 @@ class MPMSolver:
             self.p2g(dt)
             self.grid_normalization_and_gravity(dt)
             for p in self.grid_postprocess:
-                p(dt)
+                p(self.t, dt)
+            self.t += dt
             self.g2p(dt)
 
         if print_stat:
