@@ -11,33 +11,19 @@ ti.init(arch=ti.cuda)  # Try to run on GPU
 
 res = 128
 
-gui = ti.GUI("Taichi Elements", res=(res * 6, res * 3), background_color=0x112F41)
+gui = ti.GUI("Taichi Elements", res=(res * 6 * 2, res * 3 * 2), background_color=0x112F41)
 
-E_scale = 10
+E_scale = 50
 dt_scale = 1 / E_scale ** 0.5
 mpm = MPMSolver(res=(res, res), E_scale=E_scale, dt_scale=dt_scale, unbounded=True)
 
 for i in range(6):
     mpm.add_cube(lower_corner=[0.15 + 0.3 * i, 0.1],
-                 cube_size=[0.05, 0.5],
+                 cube_size=[0.05, 0.8],
                  velocity=[0, 0],
                  material=MPMSolver.material_elastic)
 
-'''
-mpm.add_surface_collider(point=(0, -0.6),
-                         normal=(0.0, 1),
-                         surface=mpm.surface_slip)
-
-mpm.add_surface_collider(point=(1.4, 0),
-                         normal=(-1, 0),
-                         surface=mpm.surface_slip)
-
-mpm.add_surface_collider(point=(-0.6, 0),
-                         normal=(1, 0),
-                         surface=mpm.surface_slip)
-'''
-
-omega_step = 6
+omega_step = 3
 
 @ti.kernel
 def vibrate(t: ti.f32, dt: ti.f32):
@@ -52,12 +38,12 @@ mpm.grid_postprocess.append(vibrate)
 print(mpm.n_particles[None])
 
 for frame in range(500):
-    mpm.step(8e-3)
+    mpm.step(1 / 60)
     colors = np.array([0x068587, 0xED553B, 0xEEEEF0, 0xFFFF00],
                       dtype=np.uint32)
     particles = mpm.particle_info()
     gui.circles(particles['position'] / [[2, 1]],
-                radius=1.5,
+                radius=2,
                 color=colors[particles['material']])
     gui.line(begin=(0, 0.2), end=(1, 0.2), radius=4, color=0xFFFFFF)
     for i in range(6):
