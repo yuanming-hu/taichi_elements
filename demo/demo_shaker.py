@@ -14,7 +14,7 @@ gui_scale = 3
 
 gui = ti.GUI("Taichi Elements", res=(res * gui_scale, res * gui_scale), background_color=0x112F41)
 
-E_scale = 20
+E_scale = 200
 dt_scale = 1 / E_scale ** 0.5
 mpm = MPMSolver(res=(res, res), E_scale=E_scale, dt_scale=dt_scale, unbounded=True)
 
@@ -53,8 +53,8 @@ for i in range(0):
 
 omega = 27
 mag = 0.02
-initial_offset = 0.3
-shaker_width = 0.4
+initial_offset = 0.1
+shaker_width = 0.8
 ground_y = 0.2
 
 @ti.kernel
@@ -80,8 +80,8 @@ def vibrate(t: ti.f32, dt: ti.f32):
 
 mpm.grid_postprocess.append(vibrate)
 
-for i in range(5):
-    mpm.add_texture(initial_offset + 0.1, 0.2 + 0.4 * i, pattern)
+for i in range(10):
+    mpm.add_texture(initial_offset + 0.25 * (i % 3), 0.2 + 0.15 * i, pattern)
 
 print(mpm.n_particles[None])
 
