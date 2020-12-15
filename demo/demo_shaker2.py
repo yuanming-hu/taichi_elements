@@ -14,7 +14,7 @@ gui_scale = 3
 
 gui = ti.GUI("Taichi Elements", res=(res * gui_scale, res * gui_scale), background_color=0x112F41)
 
-E_scale = 10
+E_scale = 20
 dt_scale = 1 / E_scale ** 0.5
 mpm = MPMSolver(res=(res, res), E_scale=E_scale, dt_scale=dt_scale, unbounded=True)
 
@@ -24,7 +24,7 @@ pattern = cv2.resize(pattern, dsize=(dsize, dsize), interpolation=cv2.INTER_CUBI
 
 space = 0.7
 
-omega = 100
+omega = 200
 mag = 0.005
 initial_offset = 0.1
 shaker_width = 0.3
@@ -32,7 +32,7 @@ ground_y = 0.2
 block_height = 0.1
 
 for i in range(3):
-    offset_y = 0.4 * i + block_height * 2
+    offset_y = 0.33 * i + block_height * 1.2
     mpm.add_cube(lower_corner=[initial_offset, ground_y + offset_y],
                  cube_size=[shaker_width, block_height],
                  velocity=[0, 0],
@@ -42,14 +42,15 @@ for i in range(3):
     tooth_width = shaker_width / num_tooth / 2
     for k in range(2):
         for j in range(num_tooth - k):
-            offset_x = initial_offset + tooth_width * (j * 2 + 0.5)
-            Y = offset_y + (k - 1) * block_height * 2
-            mpm.add_cube(lower_corner=[offset_x + tooth_width * k * 1.1, ground_y + Y + block_height],
-                         cube_size=[tooth_width / 1.2, block_height],
+            offset_x = initial_offset + tooth_width * (j * 2 + 0.5) + tooth_width * k * 1.1
+            Y = offset_y + (k - 1) * block_height * 2 + block_height + ground_y
+            real_tooth = tooth_width / 1.3
+            mpm.add_cube(lower_corner=[offset_x,  Y],
+                         cube_size=[real_tooth, block_height],
                          velocity=[0, 0],
                          material=MPMSolver.material_elastic)
-        
-    
+
+            mpm.add_ellipsoid(center=[offset_x + real_tooth / 2, Y + k * block_height], radius=real_tooth / 2 * 1.1, material=MPMSolver.material_elastic)
 
 @ti.kernel
 def vibrate(t: ti.f32, dt: ti.f32):
