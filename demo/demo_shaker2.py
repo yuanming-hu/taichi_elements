@@ -17,6 +17,7 @@ gui = ti.GUI("Taichi Elements", res=(res * gui_scale, res * gui_scale), backgrou
 E_scale = 20
 dt_scale = 1 / E_scale ** 0.5
 mpm = MPMSolver(res=(res, res), E_scale=E_scale, dt_scale=dt_scale, unbounded=True)
+mpm.set_gravity([0, -1])
 
 pattern = 1 - ti.imread('snowflake.png')[:, :, 1] * (1 / 255.0)
 dsize = 128
@@ -73,7 +74,7 @@ print(mpm.n_particles[None])
 
 frame_dt = 1 / 160
 
-for frame in range(500):
+for frame in range(3000):
     mpm.step(frame_dt)
     colors = np.array([0x068587, 0xED553B, 0xEEEEF0, 0xFFFF00],
                       dtype=np.uint32)
