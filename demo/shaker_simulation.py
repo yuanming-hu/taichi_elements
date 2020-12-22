@@ -15,6 +15,9 @@ class ShakerSimulation:
                  shaker_magnitude=0.005,
                  shaker_width=0.7,
                  gravity=[0, -2],
+                 pusher_initial_height=2.0,
+                 pusher_final_height=0.4,
+                 E_scale=20
                  ):
         ti.init(arch=ti.cuda)  # Try to run on GPU
         self.write_to_disk = True
@@ -29,7 +32,7 @@ class ShakerSimulation:
                           background_color=0x112F41,
                           show_gui=False)
 
-        self.E_scale = 20
+        self.E_scale = E_scale
         dt_scale = 1 / self.E_scale**0.5
         mpm = MPMSolver(res=(self.res, self.res),
                         E_scale=self.E_scale,
@@ -46,8 +49,8 @@ class ShakerSimulation:
         self.ground_y = ground_y
         block_height = 0.1
         self.block_height = block_height
-        self.pusher_initial_height = 2.0
-        self.pusher_final_height = 0.4
+        self.pusher_initial_height = self.pusher_initial_height
+        self.pusher_final_height = self.pusher_final_height
 
         @ti.kernel
         def vibrate(t: ti.f32, dt: ti.f32):
@@ -194,5 +197,3 @@ class ShakerSimulation:
             
         import os
         os.system(f'cd {self.output_folder} && ti video -f 60')
-
-
