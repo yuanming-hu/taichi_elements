@@ -12,16 +12,23 @@ ti.init(arch=ti.cuda)  # Try to run on GPU
 res = 256
 gui_scale = 3
 
-gui = ti.GUI("Taichi Elements", res=(res * gui_scale, res * gui_scale), background_color=0x112F41)
+gui = ti.GUI("Taichi Elements",
+             res=(res * gui_scale, res * gui_scale),
+             background_color=0x112F41)
 
 E_scale = 20
-dt_scale = 1 / E_scale ** 0.5
-mpm = MPMSolver(res=(res, res), E_scale=E_scale, dt_scale=dt_scale, unbounded=True)
+dt_scale = 1 / E_scale**0.5
+mpm = MPMSolver(res=(res, res),
+                E_scale=E_scale,
+                dt_scale=dt_scale,
+                unbounded=True)
 mpm.set_gravity([0, -1])
 
 pattern = 1 - ti.imread('snowflake.png')[:, :, 1] * (1 / 255.0)
 dsize = 128
-pattern = cv2.resize(pattern, dsize=(dsize, dsize), interpolation=cv2.INTER_CUBIC)
+pattern = cv2.resize(pattern,
+                     dsize=(dsize, dsize),
+                     interpolation=cv2.INTER_CUBIC)
 
 space = 0.7
 
@@ -38,20 +45,25 @@ for i in range(3):
                  cube_size=[shaker_width, block_height],
                  velocity=[0, 0],
                  material=MPMSolver.material_elastic)
-    
+
     num_tooth = 4
     tooth_width = shaker_width / num_tooth / 2
     for k in range(2):
         for j in range(num_tooth - k):
-            offset_x = initial_offset + tooth_width * (j * 2 + 0.5) + tooth_width * k * 1.1
+            offset_x = initial_offset + tooth_width * (
+                j * 2 + 0.5) + tooth_width * k * 1.1
             Y = offset_y + (k - 1) * block_height * 2 + block_height + ground_y
             real_tooth = tooth_width / 1.3
-            mpm.add_cube(lower_corner=[offset_x,  Y],
+            mpm.add_cube(lower_corner=[offset_x, Y],
                          cube_size=[real_tooth, block_height],
                          velocity=[0, 0],
                          material=MPMSolver.material_elastic)
 
-            mpm.add_ellipsoid(center=[offset_x + real_tooth / 2, Y + k * block_height], radius=real_tooth / 2 * 1.1, material=MPMSolver.material_elastic)
+            mpm.add_ellipsoid(
+                center=[offset_x + real_tooth / 2, Y + k * block_height],
+                radius=real_tooth / 2 * 1.1,
+                material=MPMSolver.material_elastic)
+
 
 @ti.kernel
 def vibrate(t: ti.f32, dt: ti.f32):
@@ -67,6 +79,7 @@ def vibrate(t: ti.f32, dt: ti.f32):
             mpm.grid_v[I][0] = shaker_v
         if p[0] > pos_right:
             mpm.grid_v[I][0] = shaker_v
+
 
 mpm.grid_postprocess.append(vibrate)
 
@@ -85,5 +98,8 @@ for frame in range(3000):
     gui.line(begin=(0, 0.2), end=(1, 0.2), radius=3, color=0xFFFFFF)
     offset = math.sin((frame + 0.5) * frame_dt * omega) * mag + initial_offset
     gui.line(begin=(offset, 0.2), end=(offset, 1.0), radius=3, color=0xFFFFFF)
-    gui.line(begin=(offset + shaker_width, ground_y), end=(offset + shaker_width, 1.0), radius=3, color=0xFFFFFF)
+    gui.line(begin=(offset + shaker_width, ground_y),
+             end=(offset + shaker_width, 1.0),
+             radius=3,
+             color=0xFFFFFF)
     gui.show(f'outputs5/{frame:06d}.png' if write_to_disk else None)

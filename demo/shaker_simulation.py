@@ -7,7 +7,7 @@ from engine.mpm_solver import MPMSolver
 
 write_to_disk = True
 
-ti.init(arch=ti.cuda)  # Try to run on GPU
+ti.init(arch=ti.cpu)  # Try to run on GPU
 
 res = 256
 gui_scale = 3
@@ -16,12 +16,13 @@ gui = ti.GUI("Taichi Elements",
              res=(res * gui_scale, res * gui_scale),
              background_color=0x112F41)
 
-E_scale = 200
+E_scale = 20
 dt_scale = 1 / E_scale**0.5
 mpm = MPMSolver(res=(res, res),
                 E_scale=E_scale,
                 dt_scale=dt_scale,
                 unbounded=True)
+mpm.set_gravity([0, -1])
 
 pattern = 1 - ti.imread('snowflake.png')[:, :, 1] * (1 / 255.0)
 dsize = 128
@@ -31,41 +32,37 @@ pattern = cv2.resize(pattern,
 
 space = 0.7
 
-for i in range(0):
-    offset_x = space * i - 0.1
-    mpm.add_cube(lower_corner=[0.15 + offset_x, 0.35],
-                 cube_size=[0.05, 0.5],
-                 velocity=[0, 0],
-                 material=MPMSolver.material_elastic)
-
-    mpm.add_cube(lower_corner=[0.15 + offset_x + 0.2, 0.25],
-                 cube_size=[0.1, 0.6],
-                 velocity=[0, 0],
-                 material=MPMSolver.material_elastic)
-
-    mpm.add_cube(lower_corner=[0.18 + offset_x + 0.1, 0.25],
-                 cube_size=[0.07, 0.05],
-                 velocity=[0, 0],
-                 material=MPMSolver.material_elastic)
-
-    mpm.add_ellipsoid(center=[0.175 + offset_x, 0.3],
-                      radius=0.07,
-                      material=MPMSolver.material_elastic)
-
-    # mpm.add_cube(lower_corner=[0.275 + offset_x, 0.1],
-    #              cube_size=[0.01, 0.4],
-    #              velocity=[0, 0],
-    #              material=MPMSolver.material_elastic)
-
-    mpm.add_ellipsoid(center=[0.275 + offset_x, 0.5],
-                      radius=0.05,
-                      material=MPMSolver.material_elastic)
-
-omega = 27
-mag = 0.02
+omega = 200
+mag = 0.005
 initial_offset = 0.1
-shaker_width = 0.8
+shaker_width = 0.3
 ground_y = 0.2
+block_height = 0.1
+
+for i in range(3):
+    offset_y = 0.33 * i + block_height * 1.2
+    mpm.add_cube(lower_corner=[initial_offset, ground_y + offset_y],
+                 cube_size=[shaker_width, block_height],
+                 velocity=[0, 0],
+                 material=MPMSolver.material_elastic)
+
+    num_tooth = 4
+    tooth_width = shaker_width / num_tooth / 2
+    for k in range(2):
+        for j in range(num_tooth - k):
+            offset_x = initial_offset + tooth_width * (
+                j * 2 + 0.5) + tooth_width * k * 1.1
+            Y = offset_y + (k - 1) * block_height * 2 + block_height + ground_y
+            real_tooth = tooth_width / 1.3
+            mpm.add_cube(lower_corner=[offset_x, Y],
+                         cube_size=[real_tooth, block_height],
+                         velocity=[0, 0],
+                         material=MPMSolver.material_elastic)
+
+            mpm.add_ellipsoid(
+                center=[offset_x + real_tooth / 2, Y + k * block_height],
+                radius=real_tooth / 2 * 1.1,
+                material=MPMSolver.material_elastic)
 
 
 @ti.kernel
@@ -78,12 +75,6 @@ def vibrate(t: ti.f32, dt: ti.f32):
         pos_left = slab_offset
         pos_right = pos_left + shaker_width
         shaker_v = omega * ti.cos(t * omega) * mag
-        '''
-        if p[0] < 0.
-            omega = 2 * omega_step
-            mpm.grid_v
-            mpm.grid_v[I] = ti.Vector([omega * 0.01 * ti.sin(t * omega), 0.0])
-       '''
         if p[0] < pos_left:
             mpm.grid_v[I][0] = shaker_v
         if p[0] > pos_right:
@@ -92,15 +83,11 @@ def vibrate(t: ti.f32, dt: ti.f32):
 
 mpm.grid_postprocess.append(vibrate)
 
-for i in range(10):
-    mpm.add_texture_2d(initial_offset + 0.25 * (i % 3), 0.2 + 0.15 * i,
-                       pattern)
-
 print(mpm.n_particles[None])
 
-frame_dt = 1 / 60
+frame_dt = 1 / 160
 
-for frame in range(500):
+for frame in range(3000):
     mpm.step(frame_dt)
     colors = np.array([0x068587, 0xED553B, 0xEEEEF0, 0xFFFF00],
                       dtype=np.uint32)
@@ -115,4 +102,4 @@ for frame in range(500):
              end=(offset + shaker_width, 1.0),
              radius=3,
              color=0xFFFFFF)
-    gui.show(f'outputs4/{frame:06d}.png' if write_to_disk else None)
+    gui.show(f'outputs5/{frame:06d}.png' if write_to_disk else None)

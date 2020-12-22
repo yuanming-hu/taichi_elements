@@ -11,11 +11,16 @@ ti.init(arch=ti.cuda)  # Try to run on GPU
 
 res = 128
 
-gui = ti.GUI("Taichi Elements", res=(res * 6 * 2, res * 3 * 2), background_color=0x112F41)
+gui = ti.GUI("Taichi Elements",
+             res=(res * 6 * 2, res * 3 * 2),
+             background_color=0x112F41)
 
 E_scale = 50
-dt_scale = 1 / E_scale ** 0.5
-mpm = MPMSolver(res=(res, res), E_scale=E_scale, dt_scale=dt_scale, unbounded=True)
+dt_scale = 1 / E_scale**0.5
+mpm = MPMSolver(res=(res, res),
+                E_scale=E_scale,
+                dt_scale=dt_scale,
+                unbounded=True)
 
 for i in range(6):
     mpm.add_cube(lower_corner=[0.15 + 0.3 * i, 0.1],
@@ -25,6 +30,7 @@ for i in range(6):
 
 omega_step = 3
 
+
 @ti.kernel
 def vibrate(t: ti.f32, dt: ti.f32):
     for I in ti.grouped(mpm.grid_m):
@@ -32,6 +38,7 @@ def vibrate(t: ti.f32, dt: ti.f32):
         if p[1] < 0.2:
             omega = (p[0] // 0.3 + 1) * omega_step
             mpm.grid_v[I] = ti.Vector([omega * 0.01 * ti.sin(t * omega), 0.0])
+
 
 mpm.grid_postprocess.append(vibrate)
 
@@ -47,5 +54,6 @@ for frame in range(500):
                 color=colors[particles['material']])
     gui.line(begin=(0, 0.2), end=(1, 0.2), radius=4, color=0xFFFFFF)
     for i in range(6):
-        gui.text(f'omega={(i + 1) * omega_step:.2f}/sec', (0.15 * i + 0.05, 0.1))
+        gui.text(f'omega={(i + 1) * omega_step:.2f}/sec',
+                 (0.15 * i + 0.05, 0.1))
     gui.show(f'outputs/{frame:06d}.png' if write_to_disk else None)
