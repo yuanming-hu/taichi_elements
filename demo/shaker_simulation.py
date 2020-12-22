@@ -5,25 +5,29 @@ import math
 from engine.mpm_solver import MPMSolver
 
 
-class ShaderSimulation:
+class ShakerSimulation:
     def __init__(self,
+                 output_folder,
                  res=256,
                  gui_scale=3,
                  frame_dt=1 / 160,
                  shaker_omega=200,
                  shaker_magnitude=0.005,
                  shaker_width=0.7,
-                 gravity=[0, -2]):
+                 gravity=[0, -2],
+                 ):
         ti.init(arch=ti.cuda)  # Try to run on GPU
         self.write_to_disk = True
 
+        self.output_folder = output_folder
         self.res = res
         self.gui_scale = gui_scale
 
         self.gui = ti.GUI("Shaker Simulation",
                           res=(self.res * self.gui_scale,
                                self.res * self.gui_scale),
-                          background_color=0x112F41)
+                          background_color=0x112F41,
+                          show_gui=False)
 
         self.E_scale = 20
         dt_scale = 1 / self.E_scale**0.5
@@ -86,7 +90,7 @@ class ShaderSimulation:
                           core_radius=0.03,
                           num_rods=7,
                           rod_length=0.02,
-                          rod_thickness_deg=15,
+                          rod_thickness=0.01,
                           end_radius=0.01):
         mpm = self.mpm
         for i in range(num_snowflakes):
@@ -102,9 +106,9 @@ class ShaderSimulation:
                 x = ti.Vector([r * ti.cos(phi), r * ti.sin(phi)])
                 rod_radius = core_radius + rod_length
 
-                rod_thickness_rad = math.radians(rod_thickness_deg)
-                return (r < rod_radius and -0.5 * rod_thickness_rad < phi <
-                        0.5 * rod_thickness_rad) or r < core_radius or (
+                # rod_thickness_rad = math.radians(rod_thickness_deg)
+                return (r < rod_radius and -0.5 * rod_thickness < x[1] <
+                        0.5 * rod_thickness) or r < core_radius or (
                             x - ti.Vector([rod_radius, 0])).norm() < end_radius
 
             # mpm.add_texture_2d(initial_offset + 0.25 * (i % 3), 0.2 + 0.15 * i,
@@ -178,7 +182,7 @@ class ShaderSimulation:
                  radius=3,
                  color=0xFF2233)
         gui.show(
-            f'outputs5/{self.frame:06d}.png' if self.write_to_disk else None)
+            f'{self.output_folder}/{self.frame:06d}.png' if self.write_to_disk else None)
 
         self.frame += 1
 
@@ -187,16 +191,24 @@ class ShaderSimulation:
         for i in range(frames):
             print(f"Simulating frame {i} / {frames}")
             self.advance()
+            
+        import os
+        os.system(f'cd {self.output_folder} && ti video -f 60')
 
 
-sim = ShaderSimulation(frame_dt=1 / 160, shaker_width=0.7)
+folder = utils.create_output_folder(prefix='shaker')
+
+sim = ShakerSimulation(output_folder=folder, frame_dt=1 / 160, shaker_width=0.7)
 
 # sim.create_bricks()
 sim.create_snowflakes(num_snowflakes=10,
                       core_radius=0.04,
                       num_rods=7,
                       rod_length=0.03,
-                      rod_thickness_deg=15,
+                      rod_thickness=0.015,
                       end_radius=0.015)
 
-sim.run(1000)
+sim.run(frames=20)
+
+from IPython.display import Video
+Video(f"{folder}/video.mp4")
