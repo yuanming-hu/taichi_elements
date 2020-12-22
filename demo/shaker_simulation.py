@@ -67,29 +67,33 @@ class ShaderSimulation:
     def create_snowflakes(
         self,
         core_radius=0.03,
-        num_rods=8,
-        rod_length=0.01,
+        num_rods=7,
+        rod_length=0.02,
         rod_thickness_deg=15,
+        end_radius=0.01
     ):
         mpm = self.mpm
-        for i in range(1):
+        for i in range(3):
 
             @ti.func
             def sdf(x):
                 phi = ti.atan2(x[1], x[0])
                 r = x.norm()
-
-                phi = phi % (2 * math.pi / num_rods)
+                
+                rad = 2 * math.pi / num_rods
+                phi = (phi + rad * 0.5) % rad - rad * 0.5
 
                 x = ti.Vector([r * ti.cos(phi), r * ti.sin(phi)])
-                return (r < core_radius + rod_length and phi <
-                        math.radians(rod_thickness_deg)) or r < core_radius
-                # return r < 0.1
+                rod_radius = core_radius + rod_length
+                
+                rod_thickness_rad = math.radians(rod_thickness_deg)
+                return (r < rod_radius and -0.5 * rod_thickness_rad < phi < 0.5 * rod_thickness_rad
+                        ) or r < core_radius or (x - ti.Vector([rod_radius, 0])).norm() < end_radius
 
             # mpm.add_texture_2d(initial_offset + 0.25 * (i % 3), 0.2 + 0.15 * i,
             #                    pattern)
             mpm.add_particles_inside_sdf(
-                self.initial_offset + self.shaker_width / 2, 0.2 + 0.15 * i,
+                self.initial_offset + self.shaker_width / 2, 0.2 + 0.3 * i,
                 sdf, self.res)
 
     def create_bricks(self):
