@@ -49,8 +49,8 @@ class ShakerSimulation:
         self.ground_y = ground_y
         block_height = 0.1
         self.block_height = block_height
-        self.pusher_initial_height = self.pusher_initial_height
-        self.pusher_final_height = self.pusher_final_height
+        self.pusher_initial_height = pusher_initial_height
+        self.pusher_final_height = pusher_final_height
 
         @ti.kernel
         def vibrate(t: ti.f32, dt: ti.f32):
