@@ -31,7 +31,7 @@ mpm.add_surface_collider(point=(-0.6, 0),
                          surface=mpm.surface_slip)
 
 for i in range(5):
-    mpm.add_texture(-0.1 + 0.10 * i % 3, -0.1 + 0.6 * i, pattern)
+    mpm.add_texture_2d(-0.1 + 0.10 * i % 3, -0.1 + 0.6 * i, pattern)
 
 print(mpm.n_particles[None])
 

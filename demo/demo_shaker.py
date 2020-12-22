@@ -81,7 +81,7 @@ def vibrate(t: ti.f32, dt: ti.f32):
 mpm.grid_postprocess.append(vibrate)
 
 for i in range(10):
-    mpm.add_texture(initial_offset + 0.25 * (i % 3), 0.2 + 0.15 * i, pattern)
+    mpm.add_texture_2d(initial_offset + 0.25 * (i % 3), 0.2 + 0.15 * i, pattern)
 
 print(mpm.n_particles[None])
 
