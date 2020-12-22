@@ -1,6 +1,5 @@
 import taichi as ti
 import numpy as np
-import cv2
 import utils
 import math
 from engine.mpm_solver import MPMSolver
@@ -43,34 +42,6 @@ class ShaderSimulation:
         block_height = 0.1
         self.block_height = block_height
 
-        for i in range(3):
-            offset_y = 0.33 * i + block_height * 1.2
-            mpm.add_cube(
-                lower_corner=[self.initial_offset, ground_y + offset_y],
-                cube_size=[shaker_width, block_height],
-                velocity=[0, 0],
-                material=MPMSolver.material_elastic)
-
-            num_tooth = 4
-            tooth_width = shaker_width / num_tooth / 2
-            for k in range(2):
-                for j in range(num_tooth - k):
-                    offset_x = initial_offset + tooth_width * (
-                        j * 2 + 0.5) + tooth_width * k * 1.1
-                    Y = offset_y + (
-                        k - 1) * block_height * 2 + block_height + ground_y
-                    real_tooth = tooth_width / 1.3
-                    mpm.add_cube(lower_corner=[offset_x, Y],
-                                 cube_size=[real_tooth, block_height],
-                                 velocity=[0, 0],
-                                 material=MPMSolver.material_elastic)
-
-                    mpm.add_ellipsoid(center=[
-                        offset_x + real_tooth / 2, Y + k * block_height
-                    ],
-                                      radius=real_tooth / 2 * 1.1,
-                                      material=MPMSolver.material_elastic)
-
         @ti.kernel
         def vibrate(t: ti.f32, dt: ti.f32):
             for I in ti.grouped(mpm.grid_m):
@@ -94,6 +65,40 @@ class ShaderSimulation:
         self.frame = 0
         self.frame_dt = frame_dt
         self.mpm = mpm
+
+    def create_snowflakes(self):
+        pass
+
+    def create_bricks(self):
+        mpm = self.mpm
+        for i in range(3):
+            offset_y = 0.33 * i + self.block_height * 1.2
+            mpm.add_cube(
+                lower_corner=[self.initial_offset, self.ground_y + offset_y],
+                cube_size=[self.shaker_width, self.block_height],
+                velocity=[0, 0],
+                material=MPMSolver.material_elastic)
+
+            num_tooth = 4
+            tooth_width = self.shaker_width / num_tooth / 2
+            for k in range(2):
+                for j in range(num_tooth - k):
+                    offset_x = self.initial_offset + tooth_width * (
+                        j * 2 + 0.5) + tooth_width * k * 1.1
+                    Y = offset_y + (
+                        k - 1
+                    ) * self.block_height * 2 + self.block_height + self.ground_y
+                    real_tooth = tooth_width / 1.3
+                    mpm.add_cube(lower_corner=[offset_x, Y],
+                                 cube_size=[real_tooth, self.block_height],
+                                 velocity=[0, 0],
+                                 material=MPMSolver.material_elastic)
+
+                    mpm.add_ellipsoid(center=[
+                        offset_x + real_tooth / 2, Y + k * self.block_height
+                    ],
+                                      radius=real_tooth / 2 * 1.1,
+                                      material=MPMSolver.material_elastic)
 
     def advance(self):
         self.mpm.step(self.frame_dt)
@@ -123,8 +128,14 @@ class ShaderSimulation:
 
         self.frame += 1
 
+    def run(self, frames):
+        for i in range(frames):
+            print(f"Simulating frame {i} / {frames}")
+            self.advance()
 
-shaker = ShaderSimulation(frame_dt=1 / 160)
 
-for i in range(100):
-    shaker.advance()
+sim = ShaderSimulation(frame_dt=1 / 160)
+
+sim.create_bricks()
+
+sim.run(100)
