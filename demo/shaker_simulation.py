@@ -60,14 +60,37 @@ class ShaderSimulation:
 
         mpm.grid_postprocess.append(vibrate)
 
-        print('num_particles:', mpm.n_particles[None])
-
         self.frame = 0
         self.frame_dt = frame_dt
         self.mpm = mpm
 
-    def create_snowflakes(self):
-        pass
+    def create_snowflakes(
+        self,
+        core_radius=0.03,
+        num_rods=8,
+        rod_length=0.01,
+        rod_thickness_deg=15,
+    ):
+        mpm = self.mpm
+        for i in range(1):
+
+            @ti.func
+            def sdf(x):
+                phi = ti.atan2(x[1], x[0])
+                r = x.norm()
+
+                phi = phi % (2 * math.pi / num_rods)
+
+                x = ti.Vector([r * ti.cos(phi), r * ti.sin(phi)])
+                return (r < core_radius + rod_length and phi <
+                        math.radians(rod_thickness_deg)) or r < core_radius
+                # return r < 0.1
+
+            # mpm.add_texture_2d(initial_offset + 0.25 * (i % 3), 0.2 + 0.15 * i,
+            #                    pattern)
+            mpm.add_particles_inside_sdf(
+                self.initial_offset + self.shaker_width / 2, 0.2 + 0.15 * i,
+                sdf, self.res)
 
     def create_bricks(self):
         mpm = self.mpm
@@ -107,7 +130,7 @@ class ShaderSimulation:
         particles = self.mpm.particle_info()
         gui = self.gui
         gui.circles(particles['position'] / [[1, 1]],
-                    radius=2,
+                    radius=1,
                     color=colors[particles['material']])
         gui.line(begin=(0, self.ground_y),
                  end=(1, self.ground_y),
@@ -129,6 +152,7 @@ class ShaderSimulation:
         self.frame += 1
 
     def run(self, frames):
+        print('num_particles:', self.mpm.n_particles[None])
         for i in range(frames):
             print(f"Simulating frame {i} / {frames}")
             self.advance()
@@ -136,6 +160,7 @@ class ShaderSimulation:
 
 sim = ShaderSimulation(frame_dt=1 / 160)
 
-sim.create_bricks()
+# sim.create_bricks()
+sim.create_snowflakes()
 
 sim.run(100)

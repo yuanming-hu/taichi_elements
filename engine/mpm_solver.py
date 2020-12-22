@@ -511,6 +511,20 @@ class MPMSolver:
                 ])
                 self.seed_particle(pid, x, self.material_elastic, 0xFFFFFF,
                                    self.source_velocity[None])
+                
+    @ti.kernel
+    def add_particles_inside_sdf(self, offset_x: ti.f32, offset_y: ti.f32,
+                       sdf: ti.template(), res: ti.i32):
+        for i, j in ti.ndrange((-res // 2, res // 2), (-res // 2, res // 2)):
+            offset = ti.Vector([offset_x, offset_y])
+            x = ti.Vector([
+                i * self.dx * 0.5, j * self.dx * 0.5
+            ])
+    
+            if sdf(x):
+                pid = ti.atomic_add(self.n_particles[None], 1)
+                self.seed_particle(pid, x + offset, self.material_elastic, 0xFFFFFF,
+                                   self.source_velocity[None])
 
     @ti.func
     def random_point_in_unit_sphere(self):
