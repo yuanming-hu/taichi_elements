@@ -11,7 +11,7 @@ class ShaderSimulation:
                  gui_scale=3,
                  frame_dt=1 / 160,
                  shaker_omega=200,
-                 shaker_magnitude=0.005):
+                 shaker_magnitude=0.005, gravity=[0, -2]):
         ti.init(arch=ti.cuda)  # Try to run on GPU
         self.write_to_disk = True
 
@@ -29,7 +29,7 @@ class ShaderSimulation:
                         E_scale=self.E_scale,
                         dt_scale=dt_scale,
                         unbounded=True)
-        mpm.set_gravity([0, -1])
+        mpm.set_gravity(gravity)
 
         self.omega = shaker_omega
         self.mag = shaker_magnitude
@@ -53,9 +53,9 @@ class ShaderSimulation:
                 pos_left = slab_offset
                 pos_right = pos_left + shaker_width
                 shaker_v = self.omega * ti.cos(t * self.omega) * self.mag
-                if p[0] < pos_left:
+                if p[0] < pos_left and mpm.grid_v[I][0] < shaker_v:
                     mpm.grid_v[I][0] = shaker_v
-                if p[0] > pos_right:
+                if p[0] > pos_right and mpm.grid_v[I][0] > shaker_v:
                     mpm.grid_v[I][0] = shaker_v
 
         mpm.grid_postprocess.append(vibrate)
@@ -73,7 +73,7 @@ class ShaderSimulation:
         end_radius=0.01
     ):
         mpm = self.mpm
-        for i in range(3):
+        for i in range(10):
 
             @ti.func
             def sdf(x):
@@ -93,7 +93,7 @@ class ShaderSimulation:
             # mpm.add_texture_2d(initial_offset + 0.25 * (i % 3), 0.2 + 0.15 * i,
             #                    pattern)
             mpm.add_particles_inside_sdf(
-                self.initial_offset + self.shaker_width / 2, 0.2 + 0.3 * i,
+                self.initial_offset + self.shaker_width * 0.17 + self.shaker_width * 0.3 * (i % 3), 0.2 + 0.10 * i,
                 sdf, self.res)
 
     def create_bricks(self):
@@ -167,4 +167,4 @@ sim = ShaderSimulation(frame_dt=1 / 160)
 # sim.create_bricks()
 sim.create_snowflakes()
 
-sim.run(100)
+sim.run(1000)
