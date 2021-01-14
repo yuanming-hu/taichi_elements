@@ -434,6 +434,9 @@ class Renderer:
             # v = self.particle_v[p]
             x = self.particle_x[p]
             ipos = ti.floor(x * self.inv_dx).cast(ti.i32)
+            if p% 100 == 0:
+                print(p, x, ipos)
+            
 
             for i in range(-1, 1):
                 for j in range(-1, 1):
@@ -441,17 +444,9 @@ class Renderer:
                         offset = ti.Vector([i, j, k])
                         box_ipos = ipos + offset
                         if self.inside_particle_grid(box_ipos):
-                            box_min = box_ipos * self.dx
-                            box_max = (box_ipos +
-                                       ti.Vector([1, 1, 1])) * self.dx
-                            if sphere_aabb_intersect_motion(
-                                    box_min, box_max, x,
-                                    x, self.sphere_radius):
-                                self.voxel_has_particle[box_ipos] = 1
-                                self.voxel_grid_density[box_ipos] = 1
-                                ti.append(
-                                    self.pid.parent(), box_ipos -
-                                    ti.Vector(self.particle_grid_offset), p)
+                            ti.append(
+                                self.pid.parent(), box_ipos -
+                                ti.Vector(self.particle_grid_offset), p)
 
     @ti.kernel
     def copy(self, img: ti.ext_arr(), samples: ti.i32):
