@@ -465,9 +465,11 @@ class Renderer:
                                     x + offset_end, self.sphere_radius):
                                 self.voxel_has_particle[box_ipos] = 1
                                 self.voxel_grid_density[box_ipos] = 1
-                                ti.append(
+                                len = ti.append(
                                     self.pid.parent(), box_ipos -
                                     ti.Vector(self.particle_grid_offset), p)
+                                if len > 0 and len % 10 == 0:
+                                    print(len)
 
     @ti.kernel
     def copy(self, img: ti.ext_arr(), samples: ti.i32):
@@ -557,6 +559,9 @@ class Renderer:
             self.initialize_particle(np_x[begin:end], np_v[begin:end],
                                      np_color[begin:end], begin, end)
         self.initialize_particle_grid()
+        
+        ti.sync()
+        exit()
 
     def render_frame(self, spp):
         last_t = 0
