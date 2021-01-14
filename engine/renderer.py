@@ -432,28 +432,12 @@ class Renderer:
     def initialize_particle_grid(self):
         for p in range(self.num_particles[None]):
             # v = self.particle_v[p]
-            v = ti.Vector([0.0, 0.0, 0.0])
             x = self.particle_x[p]
             ipos = ti.floor(x * self.inv_dx).cast(ti.i32)
 
-            offset_begin = shutter_begin * self.shutter_time * v
-            offset_end = (shutter_begin + 1.0) * self.shutter_time * v
-            offset_begin_grid = offset_begin
-            offset_end_grid = offset_end
-
-            for k in ti.static(range(3)):
-                if offset_end_grid[k] < offset_begin_grid[k]:
-                    t = offset_end_grid[k]
-                    offset_end_grid[k] = offset_begin_grid[k]
-                    offset_begin_grid[k] = t
-
-            offset_begin_grid = int(ti.floor(
-                offset_begin_grid * self.inv_dx)) - 1
-            offset_end_grid = int(ti.ceil(offset_end_grid * self.inv_dx)) + 1
-
-            for i in range(offset_begin_grid[0], offset_end_grid[0]):
-                for j in range(offset_begin_grid[1], offset_end_grid[1]):
-                    for k in range(offset_begin_grid[2], offset_end_grid[2]):
+            for i in range(-1, 1):
+                for j in range(-1, 1):
+                    for k in range(-1, 1):
                         offset = ti.Vector([i, j, k])
                         box_ipos = ipos + offset
                         if self.inside_particle_grid(box_ipos):
@@ -461,8 +445,8 @@ class Renderer:
                             box_max = (box_ipos +
                                        ti.Vector([1, 1, 1])) * self.dx
                             if sphere_aabb_intersect_motion(
-                                    box_min, box_max, x + offset_begin,
-                                    x + offset_end, self.sphere_radius):
+                                    box_min, box_max, x,
+                                    x, self.sphere_radius):
                                 self.voxel_has_particle[box_ipos] = 1
                                 self.voxel_grid_density[box_ipos] = 1
                                 ti.append(
