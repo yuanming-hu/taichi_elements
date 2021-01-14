@@ -431,11 +431,9 @@ class Renderer:
     @ti.kernel
     def initialize_particle_grid(self):
         for p in range(self.num_particles[None]):
-            # v = self.particle_v[p]
             x = self.particle_x[p]
             ipos = ti.floor(x * self.inv_dx).cast(ti.i32)
-            if p% 100 == 0:
-                print(p, x, ipos)
+            print(p, x, ipos)
             
 
             for i in range(-1, 1):
@@ -444,9 +442,14 @@ class Renderer:
                         offset = ti.Vector([i, j, k])
                         box_ipos = ipos + offset
                         if self.inside_particle_grid(box_ipos):
+                            len = ti.length(
+                                self.pid.parent(), box_ipos -
+                                                   ti.Vector(self.particle_grid_offset))
+                            print('before', len)
                             ti.append(
                                 self.pid.parent(), box_ipos -
                                 ti.Vector(self.particle_grid_offset), p)
+                            print('after', len)
 
     @ti.kernel
     def copy(self, img: ti.ext_arr(), samples: ti.i32):
